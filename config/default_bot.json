@@ -1,0 +1,6 @@
+{
+    "admins": [],
+    "channel_blacklist": [],
+    "allowed_messages_per_interval": 30,
+    "timeout_interval_mins": 10
+}
