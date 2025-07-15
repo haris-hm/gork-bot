@@ -1,36 +1,14 @@
-import json
-
 from discord import (
     Intents,
     Message,
     Client,
     User,
-    TextChannel,
 )
-from typing import Any
 from datetime import datetime
 
 from gork_bot.ai_requests import ResponseBuilder
 from gork_bot.message_parsing import ParsedMessage
-
-
-class BotConfig:
-    def __init__(self, config_path: str):
-        with open(config_path, "r", encoding="utf-8") as f:
-            config: dict[str, Any] = json.load(f)
-
-            self.admins: list[int] = config.get("admins", [])
-            self.channel_blacklist: list[int] = config.get("channel_blacklist", [])
-            self.allowed_messages_per_interval: int = config.get(
-                "allowed_messages_per_interval", 30
-            )
-            self.timeout_interval_mins: int = config.get("timeout_interval_mins", 10)
-
-    def is_admin(self, user: User) -> bool:
-        return user.id in self.admins
-
-    def is_channel_blacklisted(self, channel: TextChannel) -> bool:
-        return channel.id in self.channel_blacklist
+from gork_bot.config import BotConfig
 
 
 class UserInfo:
