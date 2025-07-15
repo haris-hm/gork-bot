@@ -31,11 +31,11 @@ class ParsedMessage:
     @classmethod
     async def create(cls, client: Client, message: Message):
         self = cls(message)
-        self.input_text = (
-            message.content.strip()
-            .replace(f"<@{client.user.id}>", f"@{client.user.name}")
-            .strip()
-        )
+        self.input_text = message.content.strip()
+
+        for user in message.mentions:
+            self.input_text = self.input_text.replace(f"<@{user.id}>", f"@{user.name}")
+
         self.__reference = await self.__get_referenced_message_info(client, message)
         self.__define_prompt_inputs()
         return self
