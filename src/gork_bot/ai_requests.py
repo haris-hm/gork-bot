@@ -10,9 +10,9 @@ from io import BytesIO
 from base64 import b64encode
 from typing import Any
 
-# Load environment variables from .env file
 dotenv.load_dotenv()
 OPENAI_API_KEY: str = os.getenv("OPENAI_KEY")
+
 CLIENT: OpenAI = OpenAI(api_key=OPENAI_API_KEY)
 
 
