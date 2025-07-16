@@ -1,5 +1,3 @@
-import re
-
 from discord import (
     Intents,
     Message,

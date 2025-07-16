@@ -1,12 +1,41 @@
 import re
+import dotenv
+import os
 
+from googleapiclient.discovery import build
 from typing import Any
 from discord import Attachment, Message, MessageReference, Client
 
+dotenv.load_dotenv()
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+
+
+def get_youtube_link_pattern() -> re.Pattern:
+    """
+    Returns a compiled regex pattern to match YouTube video links.
+    """
+    return re.compile(
+        r"(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{11})"
+    )
+
+
+class ParsedYoutubeLinks:
+    def __init__(self, content: str):
+        self.video_ids: list[str] = set(get_youtube_link_pattern().findall(content))
+
+        youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+        response = (
+            youtube.videos().list(part="snippet", id=",".join(self.video_ids)).execute()
+        )
+
+        self.video_titles = [
+            f"{item['snippet']['title']}" for item in response.get("items", [])
+        ]
+
 
 class ParsedAttachment:
-    def __init__(self, attachments: list[Attachment]):
-        self.url: str | None = self.__get_image_attachment(attachments)
+    def __init__(self, message: Message):
+        self.image_url: str | None = self.__get_image_attachment(message.attachments)
 
     def __get_image_attachment(self, attachments: list[Attachment]) -> dict[str, str]:
         pattern = re.compile(r".*\.(jpg|jpeg|png|webp)$", re.IGNORECASE)
@@ -24,7 +53,10 @@ class ParsedMessage:
 
         self.author: str = message.author.name
         self.content: str = message.content
-        self.attachment: ParsedAttachment = ParsedAttachment(message.attachments)
+        self.attachment: ParsedAttachment = ParsedAttachment(message)
+        self.youtube_titles: ParsedYoutubeLinks | None = ParsedYoutubeLinks(
+            message.content
+        )
         self.input_text: str | None = None
         self.input_image_url: str = None
 
@@ -60,14 +92,14 @@ class ParsedMessage:
             reference: ParsedMessage = self.__reference
             ref_content_empty: bool = len(reference.content) == 0
 
-            if reference.attachment.url:
+            if reference.attachment.image_url:
                 if not ref_content_empty:
                     self.input_text += f" (Replying to image posted by {reference.author} captioned: {reference.content})"
                 else:
                     self.input_text += (
                         f" (Replying to image posted by {reference.author})"
                     )
-                self.input_image_url = reference.attachment.url
+                self.input_image_url = reference.attachment.image_url
             elif not ref_content_empty:
                 self.input_text += (
                     f" (Replying to {reference.author}: {reference.content})"
@@ -75,5 +107,11 @@ class ParsedMessage:
             else:
                 self.input_text += f" (Replying to {reference.author})"
 
+            if self.__reference.youtube_titles.video_titles:
+                self.input_text += f" (Linked YouTube videos in original message: {', '.join(self.__reference.youtube_titles.video_titles)})"
+
         if self.attachment and not self.input_image_url:
-            self.input_image_url = self.attachment.url
+            self.input_image_url = self.attachment.image_url
+
+        if self.youtube_titles.video_titles:
+            self.input_text += f" (Linked YouTube videos: {', '.join(self.youtube_titles.video_titles)})"
