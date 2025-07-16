@@ -1,9 +1,12 @@
+import asyncio
+
 from discord import (
     Intents,
     Message,
     Client,
     User,
 )
+from openai.types.responses import ResponseTextDeltaEvent, ResponseTextDoneEvent
 from datetime import datetime
 
 from gork_bot.ai_requests import ResponseBuilder
@@ -97,9 +100,39 @@ class GorkBot(Client):
         if parsed_message.input_image_url:
             response_builder.add_image_input(parsed_message.input_image_url, 256)
 
-        response: str = response_builder.get_response()
+        if self.__bot_config.stream_output:
+            reply = None
+            partial_response = ""
+            last_edit = 0
 
-        await message.reply(
-            content=response,
-            mention_author=False,
-        )
+            for chunk in response_builder.get_response_stream():
+                if isinstance(chunk, ResponseTextDeltaEvent):
+                    partial_response += chunk.delta
+                    now = asyncio.get_event_loop().time()
+
+                    if reply is None:
+                        reply = await message.reply(
+                            content=partial_response,
+                            mention_author=False,
+                        )
+                        last_edit = now
+                    elif now - last_edit > self.__bot_config.stream_edit_interval_secs:
+                        await reply.edit(content=partial_response)
+                        last_edit = now
+                elif isinstance(chunk, ResponseTextDoneEvent):
+                    partial_response = chunk.text
+
+                    if reply is None:
+                        reply = await message.reply(
+                            content=partial_response,
+                            mention_author=False,
+                        )
+                    else:
+                        await reply.edit(content=partial_response)
+        else:
+            response: str = response_builder.get_response()
+
+            await message.reply(
+                content=response,
+                mention_author=False,
+            )

@@ -16,6 +16,10 @@ class BotConfig:
                 "allowed_messages_per_interval", 30
             )
             self.timeout_interval_mins: int = config.get("timeout_interval_mins", 10)
+            self.stream_output: bool = config.get("stream_output", True)
+            self.stream_edit_interval_secs: float = config.get(
+                "stream_edit_interval_secs", 0.5
+            )
 
     def is_admin(self, user: User) -> bool:
         return user.id in self.admins

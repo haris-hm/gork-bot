@@ -55,6 +55,21 @@ class ResponseBuilder:
             else ""
         )
 
+    def get_response_stream(self) -> str:
+        if not self.__config.model or not self.__input:
+            raise ValueError("Model and input must be set before getting a response.")
+
+        stream = CLIENT.responses.create(
+            model=self.__config.model,
+            input=[self.__input],
+            instructions=self.__config.get_instructions(),
+            max_output_tokens=self.__config.max_tokens,
+            temperature=self.__config.temperature,
+            stream=True,
+        )
+
+        return stream
+
     def __process_image(self, image_url: str, clamped_size: int) -> str:
         if not image_url:
             raise ValueError("Image URL cannot be empty.")
