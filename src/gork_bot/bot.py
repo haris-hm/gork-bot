@@ -61,7 +61,7 @@ class GorkBot(Client):
         if (
             message.author == self.user
             or self.user not in message.mentions
-            or self.__bot_config.is_channel_blacklisted(message.channel)
+            or not self.__bot_config.can_message_channel(message.channel)
         ):
             return
 

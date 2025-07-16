@@ -10,12 +10,16 @@ class BotConfig:
         with open(config_path, "r", encoding="utf-8") as f:
             config: dict[str, Any] = json.load(f)
 
-            self.admins: list[int] = config.get("admins", [])
-            self.channel_blacklist: list[int] = config.get("channel_blacklist", [])
+            self.admins: list[int] = set(config.get("admins", []))
+
+            self.channel_whitelist: list[int] = set(config.get("channel_whitelist", []))
+            self.enable_whitelist: bool = config.get("enable_whitelist", False)
+
             self.allowed_messages_per_interval: int = config.get(
                 "allowed_messages_per_interval", 30
             )
             self.timeout_interval_mins: int = config.get("timeout_interval_mins", 10)
+
             self.stream_output: bool = config.get("stream_output", True)
             self.stream_edit_interval_secs: float = config.get(
                 "stream_edit_interval_secs", 0.5
@@ -24,8 +28,10 @@ class BotConfig:
     def is_admin(self, user: User) -> bool:
         return user.id in self.admins
 
-    def is_channel_blacklisted(self, channel: TextChannel) -> bool:
-        return channel.id in self.channel_blacklist
+    def can_message_channel(self, channel: TextChannel) -> bool:
+        if self.enable_whitelist:
+            return channel.id in self.channel_whitelist
+        return True
 
 
 class AIConfig:

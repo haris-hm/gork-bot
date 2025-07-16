@@ -1,6 +1,7 @@
 {
     "admins": [],
-    "channel_blacklist": [],
+    "channel_whitelist": [],
+    "enable_whitelist": false,
     "allowed_messages_per_interval": 30,
     "timeout_interval_mins": 10,
     "stream_output": true,
