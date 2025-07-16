@@ -2,5 +2,7 @@
     "admins": [],
     "channel_blacklist": [],
     "allowed_messages_per_interval": 30,
-    "timeout_interval_mins": 10
+    "timeout_interval_mins": 10,
+    "stream_output": true,
+    "stream_edit_interval_secs": 0.5
 }
