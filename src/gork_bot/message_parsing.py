@@ -88,6 +88,10 @@ class ParsedMessage:
         return None
 
     def __define_prompt_inputs(self):
+        self.input_text = re.sub(
+            get_youtube_link_pattern(), "", self.input_text
+        ).strip()
+
         if self.__reference:
             reference: ParsedMessage = self.__reference
             ref_content_empty: bool = len(reference.content) == 0
@@ -108,10 +112,10 @@ class ParsedMessage:
                 self.input_text += f" (Replying to {reference.author})"
 
             if self.__reference.youtube_titles.video_titles:
-                self.input_text += f" (Linked YouTube videos in original message: {', '.join(self.__reference.youtube_titles.video_titles)})"
+                self.input_text += f" (Linked YouTube video(s) in original message: {', '.join(self.__reference.youtube_titles.video_titles)})"
 
         if self.attachment and not self.input_image_url:
             self.input_image_url = self.attachment.image_url
 
         if self.youtube_titles.video_titles:
-            self.input_text += f" (Linked YouTube videos: {', '.join(self.youtube_titles.video_titles)})"
+            self.input_text += f" (Linked YouTube video(s): {', '.join(self.youtube_titles.video_titles)})"
