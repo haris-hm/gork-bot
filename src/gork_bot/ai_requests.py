@@ -84,13 +84,14 @@ class ResponseBuilder:
         self, image: Image.Image, clamped_size: int = 256
     ) -> Image.Image:
         width, height = image.size
-        aspect_ratio: float = width / height
         height_larger: bool = height > width
         new_width, new_height = (0, 0)
         if height_larger:
+            aspect_ratio: float = width / height
             new_height = clamped_size
             new_width = int(aspect_ratio * new_height)
         else:
+            aspect_ratio: float = height / width
             new_width = clamped_size
             new_height = int(aspect_ratio * new_width)
 
