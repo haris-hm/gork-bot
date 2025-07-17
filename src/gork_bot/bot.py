@@ -1,15 +1,10 @@
 import asyncio
 
-from discord import (
-    Intents,
-    Message,
-    Client,
-    User,
-)
+from discord import Intents, Message, Client, User, Embed
 from openai.types.responses import ResponseTextDeltaEvent, ResponseTextDoneEvent
 from datetime import datetime
 
-from gork_bot.ai_requests import ResponseBuilder
+from gork_bot.ai_requests import ResponseBuilder, Response
 from gork_bot.message_parsing import ParsedMessage
 from gork_bot.config import BotConfig
 
@@ -82,7 +77,16 @@ class GorkBot(Client):
             return
 
         async with message.channel.typing():
-            await self.respond_to_message(message, testing=False)
+            try:
+                await self.respond_to_message(message, testing=False)
+            except Exception as e:
+                await message.reply(
+                    content="An unexpected error occurred while processing your message. Please try again later.",
+                    mention_author=False,
+                    silent=True,
+                    delete_after=60,
+                )
+                print(f"Error processing message from {author.name}: {e}")
 
     async def respond_to_message(self, message: Message, testing: bool = False):
         if testing:
@@ -101,9 +105,9 @@ class GorkBot(Client):
             response_builder.add_image_input(parsed_message.input_image_url, 256)
 
         if self.__bot_config.stream_output:
-            reply = None
-            partial_response = ""
-            last_edit = 0
+            reply: Message | None = None
+            partial_response: str = ""
+            last_edit: int = 0
 
             for chunk in response_builder.get_response_stream():
                 if isinstance(chunk, ResponseTextDeltaEvent):
@@ -130,9 +134,16 @@ class GorkBot(Client):
                     else:
                         await reply.edit(content=partial_response)
         else:
-            response: str = response_builder.get_response()
+            response: Response = response_builder.get_response()
 
-            await message.reply(
-                content=response,
-                mention_author=False,
-            )
+            if response.gif:
+                embed: Embed = Embed()
+                embed.set_image(url=response.gif)
+
+                await message.reply(
+                    content=response.text,
+                    mention_author=False,
+                    embed=embed,
+                )
+            else:
+                await message.reply(content=response.text, mention_author=False)

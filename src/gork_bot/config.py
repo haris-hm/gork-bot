@@ -47,6 +47,10 @@ class AIConfig:
             self.temperature: float = config.get("temperature", 0.8)
             self.max_tokens: int = config.get("max_tokens", 500)
 
+            self.post_gifs: bool = config.get("post_gifs", True)
+            self.gif_instruction: str = config.get("gif_instruction", "")
+            self.gif_links: dict[str, str] = config.get("gif_links", {})
+
             if not (0 <= self.__addition_chance <= 1):
                 raise ValueError("Addition chance must be between 0 and 1.")
 
@@ -56,9 +60,24 @@ class AIConfig:
             if self.max_tokens <= 0:
                 raise ValueError("Max tokens must be a positive integer.")
 
+    def add_to_instructions(self, instructions: str, addition: str) -> None:
+        """Add a new instruction to the existing instructions."""
+        if addition and isinstance(addition, str):
+            return instructions + f" {addition.strip()}"
+        else:
+            raise ValueError("Addition must be a non-empty string.")
+
     def get_instructions(self) -> str:
         instructions: str = self.__instructions.strip()
+
         if self.__random_additions and random.random() < self.__addition_chance:
             addition: str = random.choice(self.__random_additions)
-            instructions += f" {addition.strip()}"
+            instructions = self.add_to_instructions(instructions, addition)
+
+        if self.post_gifs and self.gif_links:
+            instructions = self.add_to_instructions(
+                instructions,
+                f"{self.gif_instruction}: [{', '.join(self.gif_links.keys())}]",
+            )
+
         return instructions

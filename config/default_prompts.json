@@ -8,5 +8,10 @@
     "addition_chance": 0.2,
     "model": "gpt-4.1-mini",
     "temperature": 0.8,
-    "max_tokens": 500
+    "max_tokens": 500,
+    "post_gifs": true,
+    "gif_instruction": "You can also use one, and only one, of these GIFs in your responses if it is relevant by including the keywords corresponding to the GIFs and surround them with %% (e.g., %%cat%%)",
+    "gif_links": {
+        "cat": "https://media1.tenor.com/m/HwzSXjlEoWUAAAAC/banana-cat-walking.gif"
+    }
 }

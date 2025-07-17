@@ -1,6 +1,7 @@
 import requests
 import dotenv
 import os
+import re
 
 from openai import OpenAI
 from PIL import Image
@@ -20,6 +21,25 @@ class Models:
     GPT_4_O_MINI = "gpt-4o-mini"
 
 
+class Response:
+    def __init__(self, text: str, gif_links: dict[str, str]):
+        self.text: str = text
+        self.gif: str | None = self.set_gif(gif_links)
+
+    def set_gif(self, gif_links: dict[str, str]) -> str | None:
+        if self.text:
+            pattern: re.Pattern = re.compile(r"%%([^%]+)%%")
+            matches: list[str] = pattern.findall(self.text)
+            if matches:
+                for match in matches:
+                    gif_link: str = gif_links.get(match)
+                    if gif_link:
+                        self.text = self.text.replace(f"%%{match}%%", "")
+                        return gif_link
+
+        return None
+
+
 class ResponseBuilder:
     def __init__(self, config_path: str):
         self.__input: dict[str, str] = {"role": "user", "content": []}
@@ -37,7 +57,7 @@ class ResponseBuilder:
         )
         return self
 
-    def get_response(self) -> str:
+    def get_response(self) -> Response:
         if not self.__config.model or not self.__input:
             raise ValueError("Model and input must be set before getting a response.")
 
@@ -49,11 +69,12 @@ class ResponseBuilder:
             temperature=self.__config.temperature,
         )
 
-        return (
-            response.output_text
-            if response and hasattr(response, "output_text")
-            else ""
+        response: Response = Response(
+            text=response.output_text if hasattr(response, "output_text") else "",
+            gif_links=self.__config.gif_links,
         )
+
+        return response
 
     def get_response_stream(self) -> str:
         if not self.__config.model or not self.__input:
