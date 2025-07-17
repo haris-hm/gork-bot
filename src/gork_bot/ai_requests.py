@@ -1,4 +1,5 @@
 import requests
+import random
 import dotenv
 import os
 import re
@@ -22,20 +23,20 @@ class Models:
 
 
 class Response:
-    def __init__(self, text: str, gif_links: dict[str, str]):
+    def __init__(self, text: str, keywords: dict[str, list[str]]):
         self.text: str = text
-        self.gif: str | None = self.set_gif(gif_links)
+        self.gif: str | None = self.set_gif(keywords)
 
-    def set_gif(self, gif_links: dict[str, str]) -> str | None:
+    def set_gif(self, keywords: dict[str, list[str]]) -> str | None:
         if self.text:
             pattern: re.Pattern = re.compile(r"%%([^%]+)%%")
             matches: list[str] = pattern.findall(self.text)
             if matches:
                 for match in matches:
-                    gif_link: str = gif_links.get(match)
-                    if gif_link:
+                    gif_links: list[str] = keywords.get(match)
+                    if gif_links:
                         self.text = self.text.replace(f"%%{match}%%", "")
-                        return gif_link
+                        return random.choice(gif_links)
 
         return None
 
@@ -71,7 +72,7 @@ class ResponseBuilder:
 
         response: Response = Response(
             text=response.output_text if hasattr(response, "output_text") else "",
-            gif_links=self.__config.gif_links,
+            keywords=self.__config.gif_links,
         )
 
         return response
@@ -97,7 +98,7 @@ class ResponseBuilder:
 
         response = requests.get(image_url)
         image: Image.Image = Image.open(BytesIO(response.content))
-        image = self.__resize_image(image)
+        image = self.__resize_image(image, clamped_size)
 
         return self.__encode_image(image)
 

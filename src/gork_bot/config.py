@@ -49,7 +49,7 @@ class AIConfig:
 
             self.post_gifs: bool = config.get("post_gifs", True)
             self.gif_instruction: str = config.get("gif_instruction", "")
-            self.gif_links: dict[str, str] = config.get("gif_links", {})
+            self.gif_links: dict[str, list[str]] = config.get("gif_links", {})
 
             if not (0 <= self.__addition_chance <= 1):
                 raise ValueError("Addition chance must be between 0 and 1.")

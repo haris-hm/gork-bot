@@ -12,6 +12,8 @@
     "post_gifs": true,
     "gif_instruction": "You can also use one, and only one, of these GIFs in your responses if it is relevant by including the keywords corresponding to the GIFs and surround them with %% (e.g., %%cat%%)",
     "gif_links": {
-        "cat": "https://media1.tenor.com/m/HwzSXjlEoWUAAAAC/banana-cat-walking.gif"
+        "cat": [
+            "https://media1.tenor.com/m/HwzSXjlEoWUAAAAC/banana-cat-walking.gif"
+        ]
     }
 }
