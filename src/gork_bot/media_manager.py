@@ -1,4 +1,5 @@
 import json
+import random
 
 from collections import defaultdict
 
@@ -9,10 +10,24 @@ class CustomMediaStore:
     It allows for the retrieval of media based on keywords and provides instructions for using the media.
     """
 
-    def __init__(self, path: str, instructions: str = ""):
-        self.instructions = instructions.strip()
+    def __init__(
+        self,
+        default_media: dict[str, float | str] = {},
+        custom_media: dict[str, float | str] = {},
+        internet_media: dict[str, float | str] = {},
+    ):
+        self.default_media_instructions = default_media.get("instructions", "")
 
-        with open(path, "r", encoding="utf-8") as f:
+        self.custom_media_instructions = custom_media.get("instructions", "")
+        self.custom_media_weight = custom_media.get("weight", 0.4)
+        self.custom_media_path = custom_media.get(
+            "storage_path", "resources/default_media_storage.json"
+        )
+
+        self.internet_media_instructions = internet_media.get("instructions", "")
+        self.internet_media_weight = internet_media.get("weight", 0.2)
+
+        with open(self.custom_media_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
             self.gifs: defaultdict[str, list[str]] = self.build_tag_index(
@@ -68,5 +83,19 @@ class CustomMediaStore:
 
         :return: A string containing the custom media instructions.
         """
-        custom_instructions = f"{self.instructions}: [{', '.join(self.gifs.keys())}]."
-        return custom_instructions.strip()
+        default_weight = max(
+            0.0, 1.0 - (self.custom_media_weight + self.internet_media_weight)
+        )
+
+        options = [
+            self.default_media_instructions,
+            f"{self.custom_media_instructions}: {self.gifs.keys()}",
+            self.internet_media_instructions,
+        ]
+        weights = [
+            default_weight,
+            self.custom_media_weight,
+            self.internet_media_weight,
+        ]
+
+        return random.choices(options, weights=weights, k=1)[0].strip()

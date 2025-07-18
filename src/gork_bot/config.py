@@ -50,20 +50,17 @@ class AIConfig:
             self.max_tokens: int = config.get("max_tokens", 500)
 
             self.post_media: bool = config.get("post_media", True)
-            self.__custom_media_instructions: str = config.get(
-                "custom_media_instructions", ""
+            self.__default_media: dict[str, float | str] = config.get(
+                "default_media", {}
             )
-            self.__custom_media_path: dict[str, list[str]] = config.get(
-                "custom_media_storage_path", "resources/default_media_storage.json"
+            self.__custom_media: dict[str, float | str] = config.get("custom_media", {})
+            self.__internet_media: dict[str, float | str] = config.get(
+                "internet_media", {}
             )
-            self.__internet_media_instructions: str = config.get(
-                "internet_media_instructions", ""
-            )
-            self.__media_chance: float = config.get("media_chance", 0.2)
-
             self.media_store: CustomMediaStore = CustomMediaStore(
-                path=self.__custom_media_path,
-                instructions=self.__custom_media_instructions,
+                default_media=self.__default_media,
+                custom_media=self.__custom_media,
+                internet_media=self.__internet_media,
             )
 
             if not (0 <= self.__addition_chance <= 1):
@@ -80,19 +77,14 @@ class AIConfig:
         if addition and isinstance(addition, str):
             return instructions + f" {addition.strip()}"
         else:
-            raise ValueError("Addition must be a non-empty string.")
+            return instructions
 
     def get_instructions(self) -> str:
         instructions: str = self.__instructions.strip()
 
-        if self.post_media and random.random() < self.__media_chance:
-            choice = random.choice(
-                [
-                    self.media_store.get_instructions(),
-                    self.__internet_media_instructions,
-                ]
-            )
-            instructions = self.add_to_instructions(instructions, choice)
+        instructions = self.add_to_instructions(
+            instructions, self.media_store.get_instructions()
+        )
 
         if self.__random_additions and random.random() < self.__addition_chance:
             addition: str = random.choice(self.__random_additions)
