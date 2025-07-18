@@ -10,8 +10,16 @@
     "temperature": 0.8,
     "max_tokens": 500,
     "post_media": true,
-    "custom_media_instructions": "If, and only if, one of the following keywords is relevant to the conversation, write it in double percentage signs, (e.g., %%keyword%%).",
-    "custom_media_storage_path": "resources/default_media_storage.json",
-    "internet_media_instructions": "Give me a keyword for a GIF that's relevant to this conversation by surrounding it in double percentage signs (e.g., %%funny cat%%) and I will find a gif for you.",
-    "media_chance": 0.2
+    "default_media": {
+        "instructions": "If you're asked to post a GIF, specify a relevant keyword in double percentage signs (e.g., %%funny cat%%) and I will find a GIF for you."
+    },
+    "custom_media": {
+        "instructions": "If, and only if, one of the following keywords is relevant to the conversation, write it in double percentage signs to post the associate piece of media, (e.g., %%keyword%%).",
+        "weight": 0.4,
+        "storage_path": "resources/default_media_storage.json"
+    },
+    "internet_media": {
+        "instructions": "Give me a keyword for a GIF that's relevant to this conversation by surrounding it in double percentage signs (e.g., %%funny cat%%) and I will find a gif for you.",
+        "weight": 0.2
+    }
 }
