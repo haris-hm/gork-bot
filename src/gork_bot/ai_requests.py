@@ -1,4 +1,5 @@
 import requests
+import json
 import random
 import dotenv
 import os
@@ -10,9 +11,12 @@ from io import BytesIO
 from base64 import b64encode
 
 from gork_bot.config import AIConfig
+from gork_bot.media_manager import CustomMediaStore
 
 dotenv.load_dotenv()
 OPENAI_API_KEY: str = os.getenv("OPENAI_KEY")
+GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY")
+CLIENT_KEY: str = os.getenv("CLIENT_KEY", "gork_bot")
 
 CLIENT: OpenAI = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -23,28 +27,54 @@ class Models:
 
 
 class Response:
-    def __init__(self, text: str, keywords: dict[str, list[str]]):
+    def __init__(self, text: str, media_store: CustomMediaStore):
         self.text: str = text
-        self.gif: str | None = self.set_gif(keywords)
+        self.gif: str | None = self.set_gif(media_store)
 
-    def set_gif(self, keywords: dict[str, list[str]]) -> str | None:
+    def set_gif(self, media_store: CustomMediaStore) -> str | None:
         if self.text:
             pattern: re.Pattern = re.compile(r"%%([^%]+)%%")
             matches: list[str] = pattern.findall(self.text)
             if matches:
                 for match in matches:
-                    gif_links: list[str] = keywords.get(match)
+                    self.text = self.text.replace(f"%%{match}%%", "")
+                    gif_links: list[str] = media_store.get_gif(match)
+
                     if gif_links:
-                        self.text = self.text.replace(f"%%{match}%%", "")
                         return random.choice(gif_links)
+                    else:
+                        return self.get_internet_gif(keywords=match)
 
         return None
 
+    def get_internet_gif(self, keywords: str) -> str:
+        gif_limit: int = 10
+        search_query = keywords.replace(" ", "+")
+        search_url: str = f"https://tenor.googleapis.com/v2/search?q={search_query}&key={GOOGLE_API_KEY}&client_key={CLIENT_KEY}&limit={gif_limit}"
+
+        response = requests.get(search_url)
+        if response.status_code != 200:
+            return None
+
+        data = json.loads(response.content)
+
+        if "results" not in data or not data["results"]:
+            return None
+
+        choice = random.choice(data["results"])
+
+        gif = choice.get("media_formats").get("gif").get("url")
+
+        if not gif:
+            return None
+
+        return gif
+
 
 class ResponseBuilder:
-    def __init__(self, config_path: str):
+    def __init__(self, config: AIConfig):
         self.__input: dict[str, str] = {"role": "user", "content": []}
-        self.__config: AIConfig = AIConfig(config_path)
+        self.__config: AIConfig = config
 
     def add_text_input(self, text: str):
         if text:
@@ -72,7 +102,7 @@ class ResponseBuilder:
 
         response: Response = Response(
             text=response.output_text if hasattr(response, "output_text") else "",
-            keywords=self.__config.gif_links,
+            media_store=self.__config.media_store,
         )
 
         return response

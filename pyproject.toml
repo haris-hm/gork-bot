@@ -13,11 +13,11 @@ dependencies = [
     "google-api-python-client>=2.176.0",
     "openai>=1.95.1",
     "pillow>=11.3.0",
-    "tiktoken>=0.9.0",
 ]
 
 [project.scripts]
 start = "gork_bot.app:main"
+testing = "gork_bot.app:testing"
 
 [build-system]
 requires = ["hatchling"]

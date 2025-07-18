@@ -7,7 +7,7 @@ from typing import Any
 from discord import Attachment, Message, MessageReference, Client
 
 dotenv.load_dotenv()
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 
 def get_youtube_link_pattern() -> re.Pattern:
@@ -23,7 +23,7 @@ class ParsedYoutubeLinks:
     def __init__(self, content: str):
         self.video_ids: list[str] = set(get_youtube_link_pattern().findall(content))
 
-        youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+        youtube = build("youtube", "v3", developerKey=GOOGLE_API_KEY)
         response = (
             youtube.videos().list(part="snippet", id=",".join(self.video_ids)).execute()
         )

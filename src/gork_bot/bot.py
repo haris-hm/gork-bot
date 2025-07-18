@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 
 from discord import Intents, Message, Client, User, Embed
 from openai.types.responses import ResponseTextDeltaEvent, ResponseTextDoneEvent
@@ -6,7 +7,7 @@ from datetime import datetime
 
 from gork_bot.ai_requests import ResponseBuilder, Response
 from gork_bot.message_parsing import ParsedMessage
-from gork_bot.config import BotConfig
+from gork_bot.config import BotConfig, AIConfig
 
 
 class UserInfo:
@@ -39,16 +40,25 @@ class UserInfo:
 
 
 class GorkBot(Client):
-    def __init__(self, prompt_config_path: str, bot_config_path: str):
+    def __init__(
+        self, prompt_config_path: str, bot_config_path: str, testing: bool = False
+    ):
         intents = Intents.default()
         intents.guild_messages = True
         intents.message_content = True
         intents.messages = True
         intents.guilds = True
 
-        self.__prompt_config_path = prompt_config_path
+        self.__testing: bool = testing
+
+        self.__ai_config = AIConfig(prompt_config_path)
         self.__bot_config = BotConfig(bot_config_path)
         self.__user_info: dict[int, UserInfo] = {}
+
+        if self.__bot_config.stream_output and self.__ai_config.post_media:
+            raise ValueError(
+                "Media posting is not supported in streaming mode. Please disable streaming or set post_media to False."
+            )
 
         super().__init__(intents=intents)
 
@@ -78,7 +88,7 @@ class GorkBot(Client):
 
         async with message.channel.typing():
             try:
-                await self.respond_to_message(message, testing=False)
+                await self.respond_to_message(message, testing=self.__testing)
             except Exception as e:
                 await message.reply(
                     content="An unexpected error occurred while processing your message. Please try again later.",
@@ -87,6 +97,7 @@ class GorkBot(Client):
                     delete_after=60,
                 )
                 print(f"Error processing message from {author.name}: {e}")
+                traceback.print_exc()
 
     async def respond_to_message(self, message: Message, testing: bool = False):
         if testing:
@@ -95,10 +106,11 @@ class GorkBot(Client):
                 mention_author=False,
                 silent=True,
             )
+            response = Response(text="This is a test response. %%miku%%", keywords={})
             return
 
         parsed_message: ParsedMessage = await ParsedMessage.create(self, message)
-        response_builder: ResponseBuilder = ResponseBuilder(self.__prompt_config_path)
+        response_builder: ResponseBuilder = ResponseBuilder(self.__ai_config)
 
         response_builder.add_text_input(parsed_message.input_text)
         if parsed_message.input_image_url:

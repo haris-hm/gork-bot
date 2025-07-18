@@ -12,5 +12,14 @@ def main():
         prompt_config_path="config/prompts.json", bot_config_path="config/bot.json"
     ).run(token=DISCORD_TOKEN)
 
+
+def testing():
+    GorkBot(
+        prompt_config_path="config/prompts.json",
+        bot_config_path="config/bot.json",
+        testing=True,
+    ).run(token=DISCORD_TOKEN)
+
+
 if __name__ == "__main__":
     main()

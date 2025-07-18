@@ -4,6 +4,8 @@ import random
 from discord import User, TextChannel
 from typing import Any
 
+from gork_bot.media_manager import CustomMediaStore
+
 
 class BotConfig:
     def __init__(self, config_path: str):
@@ -47,9 +49,22 @@ class AIConfig:
             self.temperature: float = config.get("temperature", 0.8)
             self.max_tokens: int = config.get("max_tokens", 500)
 
-            self.post_gifs: bool = config.get("post_gifs", True)
-            self.gif_instruction: str = config.get("gif_instruction", "")
-            self.gif_links: dict[str, list[str]] = config.get("gif_links", {})
+            self.post_media: bool = config.get("post_media", True)
+            self.__custom_media_instructions: str = config.get(
+                "custom_media_instructions", ""
+            )
+            self.__custom_media_path: dict[str, list[str]] = config.get(
+                "custom_media_storage_path", "resources/default_media_storage.json"
+            )
+            self.__internet_media_instructions: str = config.get(
+                "internet_media_instructions", ""
+            )
+            self.__media_chance: float = config.get("media_chance", 0.2)
+
+            self.media_store: CustomMediaStore = CustomMediaStore(
+                path=self.__custom_media_path,
+                instructions=self.__custom_media_instructions,
+            )
 
             if not (0 <= self.__addition_chance <= 1):
                 raise ValueError("Addition chance must be between 0 and 1.")
@@ -70,14 +85,17 @@ class AIConfig:
     def get_instructions(self) -> str:
         instructions: str = self.__instructions.strip()
 
+        if self.post_media and random.random() < self.__media_chance:
+            choice = random.choice(
+                [
+                    self.media_store.get_instructions(),
+                    self.__internet_media_instructions,
+                ]
+            )
+            instructions = self.add_to_instructions(instructions, choice)
+
         if self.__random_additions and random.random() < self.__addition_chance:
             addition: str = random.choice(self.__random_additions)
             instructions = self.add_to_instructions(instructions, addition)
-
-        if self.post_gifs and self.gif_links:
-            instructions = self.add_to_instructions(
-                instructions,
-                f"{self.gif_instruction}: [{', '.join(self.gif_links.keys())}]",
-            )
 
         return instructions
