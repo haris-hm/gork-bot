@@ -9,14 +9,14 @@ DISCORD_TOKEN: str = os.getenv("DISCORD_TOKEN")
 
 def main():
     GorkBot(
-        prompt_config_path="config/prompts.json", bot_config_path="config/bot.json"
+        prompt_config_path="config/prompts.yaml", bot_config_path="config/bot.yaml"
     ).run(token=DISCORD_TOKEN)
 
 
 def testing():
     GorkBot(
-        prompt_config_path="config/prompts.json",
-        bot_config_path="config/bot.json",
+        prompt_config_path="config/prompts.yaml",
+        bot_config_path="config/bot.yaml",
         testing=True,
     ).run(token=DISCORD_TOKEN)
 

@@ -106,7 +106,6 @@ class GorkBot(Client):
                 mention_author=False,
                 silent=True,
             )
-            response = Response(text="This is a test response. %%miku%%", keywords={})
             return
 
         parsed_message: ParsedMessage = await ParsedMessage.create(self, message)

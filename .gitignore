@@ -12,7 +12,7 @@ wheels/
 # Project files
 .idea
 *.env
-bot.json
-prompts.json
+bot.yaml
+prompts.yaml
 *.log
 media_storage.json

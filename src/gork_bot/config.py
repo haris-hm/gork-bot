@@ -1,31 +1,78 @@
-import json
 import random
+import yaml
+import os
 
 from discord import User, TextChannel
 from typing import Any
+from abc import ABC, abstractmethod
 
 from gork_bot.media_manager import CustomMediaStore
 
 
-class BotConfig:
+class Config(ABC):
+    default_values: dict[str, Any] = {}
+
     def __init__(self, config_path: str):
+        if not config_path.endswith(".yaml"):
+            raise ValueError(
+                "Configuration file must be a YAML file with a .yaml extension."
+            )
+
+        self.default_values = self.define_defaults()
+
+        if not os.path.exists(config_path):
+            with open(config_path, "w", encoding="utf-8") as f:
+                yaml.dump(self.default_values, f, allow_unicode=True, indent=4)
+
         with open(config_path, "r", encoding="utf-8") as f:
-            config: dict[str, Any] = json.load(f)
+            self.loaded_config: dict[str, Any] = yaml.safe_load(f)
 
-            self.admins: list[int] = set(config.get("admins", []))
-
-            self.channel_whitelist: list[int] = set(config.get("channel_whitelist", []))
-            self.enable_whitelist: bool = config.get("enable_whitelist", False)
-
-            self.allowed_messages_per_interval: int = config.get(
-                "allowed_messages_per_interval", 30
+    def get_config_value(self, key: str) -> Any:
+        """Get a configuration value, falling back to the default if not set."""
+        if key not in self.loaded_config or key not in self.default_values:
+            raise KeyError(
+                f"Configuration key '{key}' not found in loaded config or defaults."
             )
-            self.timeout_interval_mins: int = config.get("timeout_interval_mins", 10)
 
-            self.stream_output: bool = config.get("stream_output", True)
-            self.stream_edit_interval_secs: float = config.get(
-                "stream_edit_interval_secs", 0.5
-            )
+        return self.loaded_config.get(key, self.default_values.get(key))
+
+    @abstractmethod
+    def define_defaults(self) -> dict[str, Any]:
+        """Define the default configuration values."""
+        pass
+
+
+class BotConfig(Config):
+    def __init__(self, config_path: str):
+        super().__init__(config_path)
+
+        self.admins: set[int] = set(self.get_config_value("admins"))
+
+        self.channel_whitelist: set[int] = set(
+            self.get_config_value("channel_whitelist")
+        )
+        self.enable_whitelist: bool = self.get_config_value("enable_whitelist")
+
+        self.allowed_messages_per_interval: int = self.get_config_value(
+            "allowed_messages_per_interval"
+        )
+        self.timeout_interval_mins: int = self.get_config_value("timeout_interval_mins")
+
+        self.stream_output: bool = self.get_config_value("stream_output")
+        self.stream_edit_interval_secs: float = self.get_config_value(
+            "stream_edit_interval_secs"
+        )
+
+    def define_defaults(self) -> dict[str, Any]:
+        return {
+            "admins": [],
+            "channel_whitelist": [],
+            "enable_whitelist": True,
+            "allowed_messages_per_interval": 30,
+            "timeout_interval_mins": 10,
+            "stream_output": False,
+            "stream_edit_interval_secs": 0.5,
+        }
 
     def is_admin(self, user: User) -> bool:
         return user.id in self.admins
@@ -36,41 +83,58 @@ class BotConfig:
         return True
 
 
-class AIConfig:
+class AIConfig(Config):
     def __init__(self, config_path: str):
-        with open(config_path, "r", encoding="utf-8") as f:
-            config: dict[str, Any] = json.load(f)
+        super().__init__(config_path)
 
-            self.__instructions: str = config.get("instructions", "")
-            self.__random_additions: list[str] = config.get("potential_additions", [])
-            self.__addition_chance: float = config.get("addition_chance", 0.2)
+        self.__instructions: str = self.get_config_value("instructions")
+        self.__random_additions: list[str] = self.get_config_value(
+            "potential_additions"
+        )
+        self.__addition_chance: float = self.get_config_value("addition_chance")
 
-            self.model: str = config.get("model", "gpt-4.1-mini")
-            self.temperature: float = config.get("temperature", 0.8)
-            self.max_tokens: int = config.get("max_tokens", 500)
+        self.model: str = self.get_config_value("model")
+        self.temperature: float = self.get_config_value("temperature")
+        self.max_tokens: int = self.get_config_value("max_tokens")
 
-            self.post_media: bool = config.get("post_media", True)
-            self.__default_media: dict[str, float | str] = config.get(
-                "default_media", {}
-            )
-            self.__custom_media: dict[str, float | str] = config.get("custom_media", {})
-            self.__internet_media: dict[str, float | str] = config.get(
-                "internet_media", {}
-            )
-            self.media_store: CustomMediaStore = CustomMediaStore(
-                default_media=self.__default_media,
-                custom_media=self.__custom_media,
-                internet_media=self.__internet_media,
-            )
+        self.post_media: bool = self.get_config_value("post_media")
+        self.__default_media: dict[str, float | str] = self.get_config_value(
+            "default_media"
+        )
+        self.__custom_media: dict[str, float | str] = self.get_config_value(
+            "custom_media"
+        )
+        self.__internet_media: dict[str, float | str] = self.get_config_value(
+            "internet_media"
+        )
+        self.media_store: CustomMediaStore = CustomMediaStore(
+            default_media=self.__default_media,
+            custom_media=self.__custom_media,
+            internet_media=self.__internet_media,
+        )
 
-            if not (0 <= self.__addition_chance <= 1):
-                raise ValueError("Addition chance must be between 0 and 1.")
+        if not (0 <= self.__addition_chance <= 1):
+            raise ValueError("Addition chance must be between 0 and 1.")
 
-            if not (0 <= self.temperature <= 1):
-                raise ValueError("Temperature must be between 0 and 1.")
+        if not (0 <= self.temperature <= 1):
+            raise ValueError("Temperature must be between 0 and 1.")
 
-            if self.max_tokens <= 0:
-                raise ValueError("Max tokens must be a positive integer.")
+        if self.max_tokens <= 0:
+            raise ValueError("Max tokens must be a positive integer.")
+
+    def define_defaults(self) -> dict[str, Any]:
+        return {
+            "instructions": "",
+            "potential_additions": [],
+            "addition_chance": 0.2,
+            "model": "gpt-4.1-mini",
+            "temperature": 0.8,
+            "max_tokens": 500,
+            "post_media": True,
+            "default_media": {},
+            "custom_media": {},
+            "internet_media": {},
+        }
 
     def add_to_instructions(self, instructions: str, addition: str) -> None:
         """Add a new instruction to the existing instructions."""
