@@ -68,6 +68,13 @@ class GorkBot(Client):
 
     @rate_limit_check
     async def handle_response(self, message: Message, should_reply: bool = True):
+        if self.__testing:
+            self.send_message(
+                should_reply=should_reply,
+                original_message=message,
+                content="Testing mode is enabled. No response will be sent.",
+            )
+
         parsed_message: ParsedMessage = await ParsedMessage.create(self, message)
         response_builder: ResponseBuilder = ResponseBuilder(self._ai_config)
 
