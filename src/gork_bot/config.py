@@ -5,7 +5,6 @@ import os
 from discord import User, TextChannel
 from typing import Any
 from abc import ABC, abstractmethod
-from textwrap import dedent
 
 from gork_bot.media_manager import CustomMediaStore
 

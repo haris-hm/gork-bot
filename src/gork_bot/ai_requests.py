@@ -199,15 +199,13 @@ class ResponseBuilder:
                 )
             )
 
-        print(self.__messages)
-        print(messages)
-
         response = CLIENT.chat.completions.create(
             model=self.__config.model,
             messages=[msg.message for msg in messages],
             max_completion_tokens=self.__config.max_tokens,
             temperature=self.__config.temperature,
             stream=stream,
+            store=True,
         )
 
         if stream:
