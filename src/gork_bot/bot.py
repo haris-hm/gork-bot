@@ -1,7 +1,8 @@
 import asyncio
 import traceback
 
-from discord import Intents, Message, Client, Embed, DMChannel, TextChannel
+from discord import Intents, Message, Client, Embed, DMChannel, TextChannel, ChannelType
+from discord.threads import Thread
 from openai.types.responses import ResponseTextDeltaEvent, ResponseTextDoneEvent
 from typing import Any
 
@@ -38,29 +39,37 @@ class GorkBot(Client):
         if message.author == self.user:
             return
 
-        channel: TextChannel | DMChannel | Any = message.channel
+        channel: TextChannel | DMChannel | Thread | Any = message.channel
+        channel_type: ChannelType | None = (
+            channel.type if hasattr(channel, "type") else None
+        )
 
         try:
-            if isinstance(channel, DMChannel):
-                await self.handle_response(message, should_reply=False)
+            match channel_type:
+                case ChannelType.text:
+                    if not (
+                        self.user in message.mentions
+                        and self._bot_config.can_message_channel(channel)
+                    ):
+                        return
 
-            elif isinstance(channel, TextChannel):
-                if not (
-                    self.user in message.mentions
-                    and self._bot_config.can_message_channel(channel)
-                ):
-                    return
-
-                await self.handle_response(message)
-            else:
-                raise ValueError(f"Unsupported channel type: {type(channel)}")
+                    await self.handle_response(message)
+                case ChannelType.private:
+                    await self.handle_response(message, should_reply=False)
+                case ChannelType.public_thread | ChannelType.private_thread:
+                    pass
+                case _:
+                    raise ValueError(f"Unsupported channel type: {channel_type}")
         except Exception:
-            await message.reply(
-                content="An unexpected error occurred while processing your message. Please try again later.",
-                mention_author=False,
-                silent=True,
-                delete_after=60,
-            )
+            if isinstance(channel, DMChannel) or self._bot_config.can_message_channel(
+                channel
+            ):
+                await message.reply(
+                    content="An unexpected error occurred while processing your message. Please try again later.",
+                    mention_author=False,
+                    silent=True,
+                    delete_after=60,
+                )
 
             print(
                 f"Error processing message from {message.author.name}: {traceback.format_exc()}"
@@ -69,18 +78,17 @@ class GorkBot(Client):
     @rate_limit_check
     async def handle_response(self, message: Message, should_reply: bool = True):
         if self.__testing:
-            self.send_message(
+            await self.send_message(
                 should_reply=should_reply,
                 original_message=message,
                 content="Testing mode is enabled. No response will be sent.",
             )
+            return
 
-        parsed_message: ParsedMessage = await ParsedMessage.create(self, message)
-        response_builder: ResponseBuilder = ResponseBuilder(self._ai_config)
-
-        response_builder.add_text_input(parsed_message.input_text)
-        if parsed_message.input_image_url:
-            response_builder.add_image_input(parsed_message.input_image_url, 256)
+        parsed_messages: list[ParsedMessage] = await ParsedMessage.parse(self, message)
+        response_builder: ResponseBuilder = ResponseBuilder(
+            self._ai_config, parsed_messages
+        )
 
         if self._bot_config.stream_output:
             await self.handle_streaming_output(
@@ -98,7 +106,7 @@ class GorkBot(Client):
         partial_response: str = ""
         last_edit: int = 0
 
-        for chunk in response_builder.get_response_stream():
+        for chunk in response_builder.get_response(stream=True):
             if isinstance(chunk, ResponseTextDeltaEvent):
                 partial_response += chunk.delta
                 now = asyncio.get_event_loop().time()

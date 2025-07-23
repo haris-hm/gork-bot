@@ -5,6 +5,7 @@ import os
 from discord import User, TextChannel
 from typing import Any
 from abc import ABC, abstractmethod
+from textwrap import dedent
 
 from gork_bot.media_manager import CustomMediaStore
 
@@ -90,6 +91,7 @@ class AIConfig(Config):
     def __init__(self, config_path: str):
         super().__init__(config_path)
 
+        self.__identity: str = self.get_config_value("identity")
         self.__instructions: str = self.get_config_value("instructions")
         self.__random_additions: list[str] = self.get_config_value(
             "potential_additions"
@@ -127,6 +129,7 @@ class AIConfig(Config):
 
     def define_defaults(self) -> dict[str, Any]:
         return {
+            "identity": "",
             "instructions": "",
             "potential_additions": [],
             "addition_chance": 0.2,
@@ -147,6 +150,7 @@ class AIConfig(Config):
             return instructions
 
     def get_instructions(self) -> str:
+        identity: str = self.__identity.strip()
         instructions: str = self.__instructions.strip()
 
         instructions = self.add_to_instructions(
@@ -157,4 +161,4 @@ class AIConfig(Config):
             addition: str = random.choice(self.__random_additions)
             instructions = self.add_to_instructions(instructions, addition)
 
-        return instructions
+        return f"# Identity\n\n{identity}\n# Instructions\n\n{instructions}"

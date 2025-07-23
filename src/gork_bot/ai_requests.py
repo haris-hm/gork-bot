@@ -9,8 +9,11 @@ from openai import OpenAI
 from PIL import Image
 from io import BytesIO
 from base64 import b64encode
+from enum import Enum
+from typing import Any, Self
 
 from gork_bot.config import AIConfig
+from gork_bot.message_parsing import ParsedMessage
 from gork_bot.media_manager import CustomMediaStore
 
 dotenv.load_dotenv()
@@ -21,9 +24,17 @@ CLIENT_KEY: str = os.getenv("CLIENT_KEY", "gork_bot")
 CLIENT: OpenAI = OpenAI(api_key=OPENAI_API_KEY)
 
 
-class Models:
+class GPT_Model(Enum):
     GPT_4_1_MINI = "gpt-4.1-mini"
     GPT_4_O_MINI = "gpt-4o-mini"
+
+
+class MessageRole(Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+    DEVELOPER = "developer"
+    TOOL = "tool"
 
 
 class Response:
@@ -71,56 +82,54 @@ class Response:
         return gif
 
 
-class ResponseBuilder:
-    def __init__(self, config: AIConfig):
-        self.__input: dict[str, str] = {"role": "user", "content": []}
-        self.__config: AIConfig = config
+class Message:
+    def __init__(self, role: MessageRole):
+        self.message: dict[str, Any] = {"role": role.value}
 
-    def add_text_input(self, text: str):
+    @classmethod
+    def from_parsed_message(cls, discord_message: ParsedMessage) -> Self:
+        """
+        Creates a Message instance from a ParsedMessage.
+        """
+        message = cls(
+            role=MessageRole.ASSISTANT
+            if discord_message.from_this_bot
+            else MessageRole.USER
+        )
+        message.message["content"] = []
+
+        if discord_message.input_text:
+            message.add_text_content(discord_message.input_text)
+
+        if discord_message.input_image_url:
+            message.add_image_content(discord_message.input_image_url)
+
+        return message
+
+    @classmethod
+    def from_string(cls, content: str, role: MessageRole = MessageRole.USER) -> Self:
+        """
+        Creates a Message instance from a string content.
+        """
+        message = cls(role=role)
+        message.message["content"] = [{"type": "text", "text": content}]
+        return message
+
+    def add_text_content(self, text: str):
+        """
+        Adds text content to the message.
+        """
         if text:
-            self.__input.get("content").append({"type": "input_text", "text": text})
-        return self
+            self.message["content"].append({"type": "text", "text": text})
 
-    def add_image_input(self, image_url: str, quality: int = 256):
-        encoded_image: str = self.__process_image(image_url, quality)
-        self.__input.get("content").append(
-            {"type": "input_image", "image_url": encoded_image}
-        )
-        return self
-
-    def get_response(self) -> Response:
-        if not self.__config.model or not self.__input:
-            raise ValueError("Model and input must be set before getting a response.")
-
-        response = CLIENT.responses.create(
-            model=self.__config.model,
-            input=[self.__input],
-            instructions=self.__config.get_instructions(),
-            max_output_tokens=self.__config.max_tokens,
-            temperature=self.__config.temperature,
-        )
-
-        response: Response = Response(
-            text=response.output_text if hasattr(response, "output_text") else "",
-            media_store=self.__config.media_store,
-        )
-
-        return response
-
-    def get_response_stream(self) -> str:
-        if not self.__config.model or not self.__input:
-            raise ValueError("Model and input must be set before getting a response.")
-
-        stream = CLIENT.responses.create(
-            model=self.__config.model,
-            input=[self.__input],
-            instructions=self.__config.get_instructions(),
-            max_output_tokens=self.__config.max_tokens,
-            temperature=self.__config.temperature,
-            stream=True,
-        )
-
-        return stream
+    def add_image_content(self, image_url: str):
+        """
+        Adds image content to the message.
+        """
+        if image_url:
+            self.message["content"].append(
+                {"type": "image_url", "image_url": self.__process_image(image_url, 256)}
+            )
 
     def __process_image(self, image_url: str, clamped_size: int) -> str:
         if not image_url:
@@ -160,3 +169,51 @@ class ResponseBuilder:
         base64_image = b64encode(buffered.getvalue()).decode("utf-8")
 
         return f"data:image/jpeg;base64,{base64_image}"
+
+    def __repr__(self):
+        return (
+            f"Message(role={self.message['role']}, content={self.message['content']})"
+        )
+
+
+class ResponseBuilder:
+    def __init__(self, config: AIConfig, discord_messages: list[ParsedMessage]):
+        self.__input: dict[str, str] = {"role": "user", "content": []}
+        self.__config: AIConfig = config
+        self.__messages: list[ParsedMessage] = discord_messages
+
+    def get_response(self, stream: bool = False) -> Response:
+        if not self.__config.model or not self.__input:
+            raise ValueError("Model and input must be set before getting a response.")
+
+        messages: list[Message] = [
+            Message.from_string(
+                content=self.__config.get_instructions(), role=MessageRole.SYSTEM
+            )
+        ]
+
+        for message in self.__messages:
+            messages.append(
+                Message.from_parsed_message(
+                    message,
+                )
+            )
+
+        print(self.__messages)
+        print(messages)
+
+        response = CLIENT.chat.completions.create(
+            model=self.__config.model,
+            messages=[msg.message for msg in messages],
+            max_completion_tokens=self.__config.max_tokens,
+            temperature=self.__config.temperature,
+            stream=stream,
+        )
+
+        if stream:
+            return response
+        else:
+            return Response(
+                response.choices[0].message.content if response.choices else "",
+                self.__config.media_store,
+            )
