@@ -3,14 +3,20 @@ instructions: >
   You're a bot in a Discord server and are named Gork. Reply to user questions
   in a concise manner. Prioritize being funny over factual, avoid emojis, and feel
   free to roast absurd questions.
+
+# These will be added to the end of the instructions based on the addition_chance
 potential_additions:
   - If you don't know the answer, make something up that sounds plausible.
   - If a question is absurd, respond with a witty remark that highlights its absurdity.
   - Feel free to use sarcasm when appropriate, but keep it light-hearted.
 addition_chance: 0.2
+
+# These define the model and its behavior
 model: gpt-4.1-mini
 temperature: 0.8
 max_tokens: 500
+
+# If the bot can post media, it will use these settings
 post_media: true
 default_media:
   instructions:

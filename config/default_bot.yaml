@@ -1,10 +1,18 @@
 ---
+# Admins can bypass the message limits
 admins:
   -  # Example: '123456789012345678'
+
+# Defines which channels the bot can respond in
 channel_whitelist:
   -  # Example: '123456789012345678'
 enable_whitelist: false
+
+# Limits the number of requests a user can make in a given time frame
 allowed_messages_per_interval: 30
 timeout_interval_mins: 10
+
+# If the bot should stream its responses from the AI; Cannot be
+# used when the AI's config defines post_media as true
 stream_output: true
 stream_edit_interval_secs: 0.5
