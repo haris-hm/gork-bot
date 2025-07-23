@@ -1,42 +1,14 @@
 import asyncio
 import traceback
 
-from discord import Intents, Message, Client, User, Embed
+from discord import Intents, Message, Client, Embed, DMChannel, TextChannel
 from openai.types.responses import ResponseTextDeltaEvent, ResponseTextDoneEvent
-from datetime import datetime
+from typing import Any
 
 from gork_bot.ai_requests import ResponseBuilder, Response
 from gork_bot.message_parsing import ParsedMessage
 from gork_bot.config import BotConfig, AIConfig
-
-
-class UserInfo:
-    def __init__(self, user_id: int, name: str):
-        self.user_id: int = user_id
-        self.name: str = name
-        self.messages_in_last_hour: int = 0
-        self.last_message_time: datetime | None = None
-
-    def __repr__(self):
-        return f"UserInfo(user_id={self.user_id}, name='{self.name}')"
-
-    def update_message_stats(self, message: Message, config: BotConfig) -> bool:
-        if config.is_admin(message.author):
-            return True
-
-        message_time: datetime = message.created_at
-
-        if (
-            self.last_message_time is None
-            or (message_time - self.last_message_time).total_seconds()
-            > 60 * config.timeout_interval_mins
-        ):
-            self.messages_in_last_hour = 1
-            self.last_message_time = message_time
-        else:
-            self.messages_in_last_hour += 1
-
-        return self.messages_in_last_hour <= config.allowed_messages_per_interval
+from gork_bot.user_manager import UserInfo, rate_limit_check
 
 
 class GorkBot(Client):
@@ -51,11 +23,11 @@ class GorkBot(Client):
 
         self.__testing: bool = testing
 
-        self.__ai_config = AIConfig(prompt_config_path)
-        self.__bot_config = BotConfig(bot_config_path)
-        self.__user_info: dict[int, UserInfo] = {}
+        self._user_info: dict[int, UserInfo] = {}
+        self._ai_config = AIConfig(prompt_config_path)
+        self._bot_config = BotConfig(bot_config_path)
 
-        if self.__bot_config.stream_output and self.__ai_config.post_media:
+        if self._bot_config.stream_output and self._ai_config.post_media:
             raise ValueError(
                 "Media posting is not supported in streaming mode. Please disable streaming or set post_media to False."
             )
@@ -63,98 +35,122 @@ class GorkBot(Client):
         super().__init__(intents=intents)
 
     async def on_message(self, message: Message):
-        if (
-            message.author == self.user
-            or self.user not in message.mentions
-            or not self.__bot_config.can_message_channel(message.channel)
-        ):
+        if message.author == self.user:
             return
 
-        author: User = message.author
+        channel: TextChannel | DMChannel | Any = message.channel
 
-        if author.id not in self.__user_info.keys():
-            self.__user_info[author.id] = UserInfo(user_id=author.id, name=author.name)
+        try:
+            if isinstance(channel, DMChannel):
+                await self.handle_response(message, should_reply=False)
 
-        user_info: UserInfo = self.__user_info[author.id]
+            elif isinstance(channel, TextChannel):
+                if not (
+                    self.user in message.mentions
+                    and self._bot_config.can_message_channel(channel)
+                ):
+                    return
 
-        if not user_info.update_message_stats(message, self.__bot_config):
+                await self.handle_response(message)
+            else:
+                raise ValueError(f"Unsupported channel type: {type(channel)}")
+        except Exception:
             await message.reply(
-                content=f"Slow down, {author.mention}! You can only send {self.__bot_config.allowed_messages_per_interval} messages every {self.__bot_config.timeout_interval_mins} minute(s).",
+                content="An unexpected error occurred while processing your message. Please try again later.",
                 mention_author=False,
                 silent=True,
                 delete_after=60,
             )
-            return
 
-        async with message.channel.typing():
-            try:
-                await self.respond_to_message(message, testing=self.__testing)
-            except Exception as e:
-                await message.reply(
-                    content="An unexpected error occurred while processing your message. Please try again later.",
-                    mention_author=False,
-                    silent=True,
-                    delete_after=60,
-                )
-                print(f"Error processing message from {author.name}: {e}")
-                traceback.print_exc()
-
-    async def respond_to_message(self, message: Message, testing: bool = False):
-        if testing:
-            await message.reply(
-                content="This is a test response. The bot is working correctly.",
-                mention_author=False,
-                silent=True,
+            print(
+                f"Error processing message from {message.author.name}: {traceback.format_exc()}"
             )
-            return
 
+    @rate_limit_check
+    async def handle_response(self, message: Message, should_reply: bool = True):
         parsed_message: ParsedMessage = await ParsedMessage.create(self, message)
-        response_builder: ResponseBuilder = ResponseBuilder(self.__ai_config)
+        response_builder: ResponseBuilder = ResponseBuilder(self._ai_config)
 
         response_builder.add_text_input(parsed_message.input_text)
         if parsed_message.input_image_url:
             response_builder.add_image_input(parsed_message.input_image_url, 256)
 
-        if self.__bot_config.stream_output:
-            reply: Message | None = None
-            partial_response: str = ""
-            last_edit: int = 0
-
-            for chunk in response_builder.get_response_stream():
-                if isinstance(chunk, ResponseTextDeltaEvent):
-                    partial_response += chunk.delta
-                    now = asyncio.get_event_loop().time()
-
-                    if reply is None:
-                        reply = await message.reply(
-                            content=partial_response,
-                            mention_author=False,
-                        )
-                        last_edit = now
-                    elif now - last_edit > self.__bot_config.stream_edit_interval_secs:
-                        await reply.edit(content=partial_response)
-                        last_edit = now
-                elif isinstance(chunk, ResponseTextDoneEvent):
-                    partial_response = chunk.text
-
-                    if reply is None:
-                        reply = await message.reply(
-                            content=partial_response,
-                            mention_author=False,
-                        )
-                    else:
-                        await reply.edit(content=partial_response)
+        if self._bot_config.stream_output:
+            await self.handle_streaming_output(
+                response_builder, message, should_reply=should_reply
+            )
         else:
-            response: Response = response_builder.get_response()
+            await self.handle_default_output(
+                message, response_builder, should_reply=should_reply
+            )
 
-            if response.gif:
-                embed: Embed = Embed()
-                embed.set_image(url=response.gif)
+    async def handle_streaming_output(
+        self, response_builder: ResponseBuilder, message: Message, should_reply: bool
+    ):
+        response: Message | None = None
+        partial_response: str = ""
+        last_edit: int = 0
 
-                await message.reply(
-                    content=response.text,
-                    mention_author=False,
-                    embed=embed,
-                )
-            else:
-                await message.reply(content=response.text, mention_author=False)
+        for chunk in response_builder.get_response_stream():
+            if isinstance(chunk, ResponseTextDeltaEvent):
+                partial_response += chunk.delta
+                now = asyncio.get_event_loop().time()
+
+                if response is None:
+                    response = await self.send_message(
+                        should_reply,
+                        message,
+                        content=partial_response,
+                    )
+
+                    last_edit = now
+                elif now - last_edit > self._bot_config.stream_edit_interval_secs:
+                    await response.edit(content=partial_response)
+                    last_edit = now
+            elif isinstance(chunk, ResponseTextDoneEvent):
+                partial_response = chunk.text
+
+                if response is None:
+                    response = await self.send_message(
+                        should_reply,
+                        message,
+                        content=partial_response,
+                    )
+                else:
+                    await response.edit(content=partial_response)
+
+    async def handle_default_output(
+        self, message: Message, response_builder: ResponseBuilder, should_reply: bool
+    ):
+        response: Response = response_builder.get_response()
+        embed: Embed | None = None
+
+        if response.gif:
+            embed = Embed()
+            embed.set_image(url=response.gif)
+
+        await self.send_message(
+            should_reply,
+            message,
+            content=response.text,
+            embed=embed,
+        )
+
+    async def send_message(
+        self,
+        should_reply: bool,
+        original_message: Message,
+        content: str,
+        embed: Embed | None = None,
+    ):
+        if should_reply:
+            return await original_message.reply(
+                content=content,
+                mention_author=False,
+                embed=embed,
+            )
+        else:
+            return await original_message.channel.send(
+                content=content,
+                embed=embed,
+            )

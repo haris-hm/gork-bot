@@ -16,3 +16,5 @@ timeout_interval_mins: 10
 # used when the AI's config defines post_media as true
 stream_output: true
 stream_edit_interval_secs: 0.5
+
+can_respond_to_dm: true

@@ -63,6 +63,8 @@ class BotConfig(Config):
             "stream_edit_interval_secs"
         )
 
+        self.can_respond_to_dm: bool = self.get_config_value("can_respond_to_dm")
+
     def define_defaults(self) -> dict[str, Any]:
         return {
             "admins": [],
@@ -72,6 +74,7 @@ class BotConfig(Config):
             "timeout_interval_mins": 10,
             "stream_output": False,
             "stream_edit_interval_secs": 0.5,
+            "can_respond_to_dm": True,
         }
 
     def is_admin(self, user: User) -> bool:
