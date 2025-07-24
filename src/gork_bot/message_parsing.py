@@ -57,6 +57,7 @@ class ParsedAttachment:
 
 class ParsedMessage:
     def __init__(self, message: Message):
+        self.original_message: Message = message
         self.author: str = message.author.name
         self.from_this_bot: bool = False
         self.content: str = message.content

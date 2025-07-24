@@ -57,6 +57,15 @@ class GorkBot(Client):
                 case ChannelType.private:
                     await self.handle_response(message, should_reply=False)
                 case ChannelType.public_thread | ChannelType.private_thread:
+                    if isinstance(channel, Thread):
+                        if (
+                            not channel.owner
+                            or channel.owner != self.user
+                            or not channel.me
+                        ):
+                            return
+
+                        await self.handle_response(message, should_reply=False)
                     pass
                 case _:
                     raise ValueError(f"Unsupported channel type: {channel_type}")
@@ -85,26 +94,55 @@ class GorkBot(Client):
             )
             return
 
-        parsed_messages: list[ParsedMessage] = await ParsedMessage.parse(self, message)
+        parsed_messages: list[ParsedMessage] = []
+        referenced_message: ParsedMessage | None = None
+
+        if isinstance(message.channel, Thread):
+            message_history = reversed(
+                [msg async for msg in message.channel.history(limit=10)]
+            )
+            for msg in message_history:
+                parsed_msg: ParsedMessage = await ParsedMessage.parse(
+                    self, msg, get_reference=False
+                )
+                parsed_messages.append(parsed_msg[0])
+        else:
+            parsed_messages = await ParsedMessage.parse(self, message)
+            referenced_message = (
+                parsed_messages[0] if len(parsed_messages) > 1 else None
+            )
+
         response_builder: ResponseBuilder = ResponseBuilder(
             self._ai_config, parsed_messages, message.author.name
         )
 
         if self._bot_config.stream_output:
             await self.handle_streaming_output(
-                response_builder, message, should_reply=should_reply
+                response_builder,
+                message,
+                should_reply=should_reply,
+                referenced_message=referenced_message,
             )
         else:
             await self.handle_default_output(
-                message, response_builder, should_reply=should_reply
+                message,
+                response_builder,
+                should_reply=should_reply,
+                referenced_message=referenced_message,
             )
 
     async def handle_streaming_output(
-        self, response_builder: ResponseBuilder, message: Message, should_reply: bool
+        self,
+        response_builder: ResponseBuilder,
+        message: Message,
+        should_reply: bool,
+        referenced_message: ParsedMessage | None = None,
     ):
         response: Message | None = None
         partial_response: str = ""
         last_edit: int = 0
+
+        await self.create_thread(message, referenced_message)
 
         for chunk in response_builder.get_response(stream=True):
             if isinstance(chunk, ResponseTextDeltaEvent):
@@ -135,7 +173,11 @@ class GorkBot(Client):
                     await response.edit(content=partial_response)
 
     async def handle_default_output(
-        self, message: Message, response_builder: ResponseBuilder, should_reply: bool
+        self,
+        message: Message,
+        response_builder: ResponseBuilder,
+        should_reply: bool,
+        referenced_message: ParsedMessage | None = None,
     ):
         response: Response = response_builder.get_response()
         embed: Embed | None = None
@@ -144,12 +186,30 @@ class GorkBot(Client):
             embed = Embed()
             embed.set_image(url=response.gif)
 
+        await self.create_thread(message, referenced_message)
         await self.send_message(
             should_reply,
             message,
             content=response.get_text(),
             embed=embed,
         )
+
+    async def create_thread(
+        self, message: Message, referenced_message: ParsedMessage
+    ) -> Thread | None:
+        if not (referenced_message and referenced_message.from_this_bot) or isinstance(
+            message.channel, Thread
+        ):
+            return None
+
+        # TODO: Make an AI request to generate a thread name based on the message content
+        thread_name = f"Follow-up Discussion with {message.author.name}"
+        thread = await message.create_thread(
+            name=thread_name,
+            auto_archive_duration=60,
+            reason="Creating a thread for follow-up discussion.",
+        )
+        return thread
 
     async def send_message(
         self,
@@ -158,10 +218,15 @@ class GorkBot(Client):
         content: str,
         embed: Embed | None = None,
     ):
-        if should_reply:
+        if should_reply and not original_message.thread:
             return await original_message.reply(
                 content=content,
                 mention_author=False,
+                embed=embed,
+            )
+        elif original_message.thread:
+            return await original_message.thread.send(
+                content=content,
                 embed=embed,
             )
         else:
