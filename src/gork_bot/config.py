@@ -58,11 +58,6 @@ class BotConfig(Config):
         )
         self.timeout_interval_mins: int = self.get_config_value("timeout_interval_mins")
 
-        self.stream_output: bool = self.get_config_value("stream_output")
-        self.stream_edit_interval_secs: float = self.get_config_value(
-            "stream_edit_interval_secs"
-        )
-
         self.can_respond_to_dm: bool = self.get_config_value("can_respond_to_dm")
 
     def define_defaults(self) -> dict[str, Any]:
@@ -72,8 +67,6 @@ class BotConfig(Config):
             "enable_whitelist": True,
             "allowed_messages_per_interval": 30,
             "timeout_interval_mins": 10,
-            "stream_output": False,
-            "stream_edit_interval_secs": 0.5,
             "can_respond_to_dm": True,
         }
 

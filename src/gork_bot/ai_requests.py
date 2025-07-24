@@ -208,7 +208,7 @@ class ResponseBuilder:
 
         return [input.body for input in inputs]
 
-    def get_response(self, stream: bool = False) -> Response:
+    def get_response(self) -> Response:
         model_name: str = self.__config.model
         model_instructions: str = self.__config.get_instructions()
 
@@ -220,17 +220,13 @@ class ResponseBuilder:
             input=self.build_inputs(model_instructions),
             max_output_tokens=self.__config.max_tokens,
             temperature=self.__config.temperature,
-            stream=stream,
             store=True,
             metadata={
                 "requestor": self.__requestor,
             },
         )
 
-        if stream:
-            return response
-        else:
-            return Response(
-                response.output_text,
-                self.__config.media_store,
-            )
+        return Response(
+            response.output_text,
+            self.__config.media_store,
+        )
