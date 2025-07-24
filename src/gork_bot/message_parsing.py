@@ -80,6 +80,7 @@ class ParsedMessage:
         self = cls(message)
         self.from_this_bot = message.author == client.user
         self.input_text = re.sub(yt_url_pattern, "", message.content.strip())
+        self.input_image_url = self.attachment.image_url
 
         for user in message.mentions:
             self.input_text = self.input_text.replace(f"<@{user.id}>", f"@{user.name}")

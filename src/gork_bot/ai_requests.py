@@ -39,16 +39,21 @@ class MessageRole(Enum):
 
 class Response:
     def __init__(self, text: str, media_store: CustomMediaStore):
+        self.__keyword_tag_pattern: re.Pattern = re.compile(r"%%([^%]+)%%")
+
         self.text: str = text
         self.gif: str | None = self.set_gif(media_store)
 
+    def get_text(self) -> str:
+        formatted_text: str = self.text.strip()
+        formatted_text = re.sub(self.__keyword_tag_pattern, "", formatted_text)
+        return formatted_text
+
     def set_gif(self, media_store: CustomMediaStore) -> str | None:
         if self.text:
-            pattern: re.Pattern = re.compile(r"%%([^%]+)%%")
-            matches: list[str] = pattern.findall(self.text)
+            matches: list[str] = self.__keyword_tag_pattern.findall(self.text)
             if matches:
                 for match in matches:
-                    self.text = self.text.replace(f"%%{match}%%", "")
                     gif_links: list[str] = media_store.get_gif(match)
 
                     if gif_links:
@@ -82,9 +87,10 @@ class Response:
         return gif
 
 
-class Message:
+class Input:
     def __init__(self, role: MessageRole):
-        self.message: dict[str, Any] = {"role": role.value}
+        self.role: MessageRole = role
+        self.body: dict[str, Any] = {"role": role.value, "content": []}
 
     @classmethod
     def from_parsed_message(cls, discord_message: ParsedMessage) -> Self:
@@ -96,7 +102,6 @@ class Message:
             if discord_message.from_this_bot
             else MessageRole.USER
         )
-        message.message["content"] = []
 
         if discord_message.input_text:
             message.add_text_content(discord_message.input_text)
@@ -112,7 +117,7 @@ class Message:
         Creates a Message instance from a string content.
         """
         message = cls(role=role)
-        message.message["content"] = [{"type": "text", "text": content}]
+        message.add_text_content(content)
         return message
 
     def add_text_content(self, text: str):
@@ -120,15 +125,22 @@ class Message:
         Adds text content to the message.
         """
         if text:
-            self.message["content"].append({"type": "text", "text": text})
+            match self.role:
+                case MessageRole.USER | MessageRole.DEVELOPER:
+                    self.body["content"].append({"type": "input_text", "text": text})
+                case MessageRole.ASSISTANT:
+                    self.body["content"].append({"type": "output_text", "text": text})
 
     def add_image_content(self, image_url: str):
         """
         Adds image content to the message.
         """
         if image_url:
-            self.message["content"].append(
-                {"type": "image_url", "image_url": self.__process_image(image_url, 256)}
+            self.body["content"].append(
+                {
+                    "type": "input_image",
+                    "image_url": self.__process_image(image_url, 256),
+                }
             )
 
     def __process_image(self, image_url: str, clamped_size: int) -> str:
@@ -171,47 +183,54 @@ class Message:
         return f"data:image/jpeg;base64,{base64_image}"
 
     def __repr__(self):
-        return (
-            f"Message(role={self.message['role']}, content={self.message['content']})"
-        )
+        return f"Message(role={self.body['role']}, content={self.body['content']})"
 
 
 class ResponseBuilder:
-    def __init__(self, config: AIConfig, discord_messages: list[ParsedMessage]):
-        self.__input: dict[str, str] = {"role": "user", "content": []}
+    def __init__(
+        self, config: AIConfig, discord_messages: list[ParsedMessage], requestor: str
+    ):
         self.__config: AIConfig = config
-        self.__messages: list[ParsedMessage] = discord_messages
+        self.__inputs: list[ParsedMessage] = discord_messages
+        self.__requestor: str = requestor
 
-    def get_response(self, stream: bool = False) -> Response:
-        if not self.__config.model or not self.__input:
-            raise ValueError("Model and input must be set before getting a response.")
-
-        messages: list[Message] = [
-            Message.from_string(
-                content=self.__config.get_instructions(), role=MessageRole.SYSTEM
-            )
+    def build_inputs(self, model_instructions: str) -> list[dict[str, Any]]:
+        inputs: list[Input] = [
+            Input.from_string(content=model_instructions, role=MessageRole.DEVELOPER)
         ]
 
-        for message in self.__messages:
-            messages.append(
-                Message.from_parsed_message(
-                    message,
+        for input in self.__inputs:
+            inputs.append(
+                Input.from_parsed_message(
+                    input,
                 )
             )
 
-        response = CLIENT.chat.completions.create(
-            model=self.__config.model,
-            messages=[msg.message for msg in messages],
-            max_completion_tokens=self.__config.max_tokens,
+        return [input.body for input in inputs]
+
+    def get_response(self, stream: bool = False) -> Response:
+        model_name: str = self.__config.model
+        model_instructions: str = self.__config.get_instructions()
+
+        if not model_name or not model_instructions:
+            raise ValueError("Model and input must be set before getting a response.")
+
+        response = CLIENT.responses.create(
+            model=model_name,
+            input=self.build_inputs(model_instructions),
+            max_output_tokens=self.__config.max_tokens,
             temperature=self.__config.temperature,
             stream=stream,
             store=True,
+            metadata={
+                "requestor": self.__requestor,
+            },
         )
 
         if stream:
             return response
         else:
             return Response(
-                response.choices[0].message.content if response.choices else "",
+                response.output_text,
                 self.__config.media_store,
             )

@@ -87,7 +87,7 @@ class GorkBot(Client):
 
         parsed_messages: list[ParsedMessage] = await ParsedMessage.parse(self, message)
         response_builder: ResponseBuilder = ResponseBuilder(
-            self._ai_config, parsed_messages
+            self._ai_config, parsed_messages, message.author.name
         )
 
         if self._bot_config.stream_output:
@@ -147,7 +147,7 @@ class GorkBot(Client):
         await self.send_message(
             should_reply,
             message,
-            content=response.text,
+            content=response.get_text(),
             embed=embed,
         )
 

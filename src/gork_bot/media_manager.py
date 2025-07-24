@@ -89,7 +89,7 @@ class CustomMediaStore:
 
         options = [
             self.default_media_instructions,
-            f"{self.custom_media_instructions}: {','.join(self.gifs.keys())}",
+            f"{self.custom_media_instructions}: {', '.join(self.gifs.keys())}",
             self.internet_media_instructions,
         ]
         weights = [
