@@ -307,13 +307,18 @@ class ResponseHandler:
             discord_messages=message_history,
         )
 
-        thread_name = response_builder.request_response(
-            model=GPT_Model.GPT_4_1_NANO,
-            instructions=self._ai_config.thread_name_generation_instructions,
-            metadata={
-                "reason": RequestReason.THREAD_NAME_GENERATION.value,
-            },
-        ).get_text()
+        thread_name = (
+            response_builder.request_response(
+                model=GPT_Model.GPT_4_1_NANO,
+                instructions=self._ai_config.thread_name_generation_instructions,
+                metadata={
+                    "reason": RequestReason.THREAD_NAME_GENERATION.value,
+                },
+            )
+            .get_text()
+            .replace('"', "")
+            .strip()
+        )
 
         thread = await self.message.message_snowflake.create_thread(
             name=thread_name,
