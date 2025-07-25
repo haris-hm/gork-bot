@@ -4,25 +4,29 @@ import os
 
 from googleapiclient.discovery import build
 from typing import Self
-from discord import Attachment, Message, MessageReference, Client
+from discord import (
+    Attachment,
+    Message,
+    MessageReference,
+    Thread,
+    User,
+    Thread,
+    TextChannel,
+    DMChannel,
+    ChannelType,
+)
 
 dotenv.load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 
-def get_youtube_link_pattern() -> re.Pattern:
-    """
-    Returns a compiled regex pattern to match YouTube video links.
-    """
-    return
-
-
 class ParsedYoutubeLinks:
+    __yt_video_id_pattern: re.Pattern = re.compile(
+        r"(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{11})"
+    )
+
     def __init__(self, content: str):
-        yt_video_id_pattern: re.Pattern = re.compile(
-            r"(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{11})"
-        )
-        self.video_ids: list[str] = set(yt_video_id_pattern.findall(content))
+        self.video_ids: list[str] = set(self.__yt_video_id_pattern.findall(content))
 
         youtube = build("youtube", "v3", developerKey=GOOGLE_API_KEY)
         response = (
@@ -55,73 +59,105 @@ class ParsedAttachment:
         return None
 
 
+class ParsedChannelInfo:
+    def __init__(self, channel: TextChannel | DMChannel | Thread):
+        self.channel: TextChannel | DMChannel | Thread = channel
+        self.channel_id: int = channel.id
+        self.channel_name: str = (
+            channel.name if hasattr(channel, "name") else "DM Channel"
+        )
+        self.channel_type: ChannelType = channel.type
+
+        if isinstance(channel, Thread):
+            self.thread_id: int = channel.id
+            self.thread_name: str = channel.name
+            self.is_thread: bool = True
+        else:
+            self.thread_id = None
+            self.thread_name = None
+            self.is_thread: bool = False
+
+
 class ParsedMessage:
-    def __init__(self, message: Message):
-        self.original_message: Message = message
+    __yt_url_pattern: re.Pattern = re.compile(
+        r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/(watch\?v=|embed/|v/|shorts/)?([A-Za-z0-9_-]{11})",
+        re.IGNORECASE,
+    )
+
+    def __init__(self, message: Message, bot_user: User):
+        if message.channel.type not in (
+            ChannelType.text,
+            ChannelType.private,
+            ChannelType.public_thread,
+            ChannelType.private_thread,
+        ):
+            raise ValueError(
+                f"Unsupported channel type: {message.channel.type}. "
+                "ParsedMessage can only be used with text, DM, or public/private thread channels."
+            )
+
+        self.message_snowflake: Message = message
+        self.bot_user: User = bot_user
+
+        self.from_this_bot: bool = message.author == bot_user
+
         self.author: str = message.author.name
-        self.from_this_bot: bool = False
         self.content: str = message.content
+        self.mentions: list[User] = message.mentions
+
         self.attachment: ParsedAttachment = ParsedAttachment(message)
         self.youtube_titles: ParsedYoutubeLinks | None = ParsedYoutubeLinks(
             message.content
         )
 
-        self.input_text: str | None = None
-        self.input_image_url: str = None
-
-    @classmethod
-    async def parse(
-        cls, client: Client, message: Message, get_reference: bool = True
-    ) -> list[Self]:
-        yt_url_pattern: re.Pattern = re.compile(
-            r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/(watch\?v=|embed/|v/|shorts/)?([A-Za-z0-9_-]{11})",
-            re.IGNORECASE,
-        )
-
-        self = cls(message)
-        self.from_this_bot = message.author == client.user
-        self.input_text = re.sub(yt_url_pattern, "", message.content.strip())
-        self.input_image_url = self.attachment.image_url
-
-        for user in message.mentions:
-            self.input_text = self.input_text.replace(f"<@{user.id}>", f"@{user.name}")
-
-        messages: list[ParsedMessage] = [self]
-
-        if get_reference:
-            referenced_message: (
-                ParsedMessage | None
-            ) = await self.__define_referenced_message(client, message)
-
-            if referenced_message:
-                messages = [referenced_message, self]
-
-        return messages
-
     def get_prompt_text(self) -> str:
-        prompt_text: str = f"{self.author}: {self.input_text}"
+        message_conent: str = re.sub(self.__yt_url_pattern, "", self.content.strip())
+
+        for user in self.mentions:
+            message_conent = message_conent.replace(f"<@{user.id}>", f"@{user.name}")
+
+        prompt_text: str = f"{self.author}: {message_conent}"
         if self.youtube_titles and self.youtube_titles.video_titles:
             prompt_text += f" {self.youtube_titles.get_prompt_text()}"
+
         return prompt_text.strip()
 
-    async def __define_referenced_message(
-        self, client: Client, message: Message
-    ) -> Self | None:
-        if message.reference and message.reference.message_id:
-            ref_message: MessageReference = message.reference
-            channel = client.get_channel(ref_message.channel_id)
+    def get_prompt_image_url(self) -> str | None:
+        return self.attachment.image_url
+
+    def get_channel_info(self) -> ParsedChannelInfo:
+        """
+        Returns the channel information for the message.
+        """
+        return ParsedChannelInfo(self.message_snowflake.channel)
+
+    async def get_history(self, limit: int = 10) -> list[Self]:
+        """
+        Returns the history of messages in the thread if this message is part of a thread.
+        """
+        message_history: list[Self] = [self]
+
+        if self.get_channel_info().is_thread:
+            message_history = [
+                ParsedMessage.parse(self.thread.client, msg)
+                async for msg in self.thread.history(limit=limit)
+            ]
+        elif (
+            self.message_snowflake.reference
+            and self.message_snowflake.reference.message_id
+        ):
+            ref_message: MessageReference = self.message_snowflake.reference
+            channel = self.message_snowflake.channel
 
             if channel:
                 referenced_message: Message = await channel.fetch_message(
                     ref_message.message_id
                 )
-                parsed_reference: ParsedMessage = await ParsedMessage.parse(
-                    client, referenced_message, get_reference=False
+                message_history.insert(
+                    0, ParsedMessage(referenced_message, self.bot_user)
                 )
 
-                return parsed_reference[0] if parsed_reference else None
-
-        return None
+        return message_history
 
     def __repr__(self) -> str:
         return f"ParsedMessage(author={self.author}, content={self.content})"

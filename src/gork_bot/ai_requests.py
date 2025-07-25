@@ -103,11 +103,14 @@ class Input:
             else MessageRole.USER
         )
 
-        if discord_message.input_text:
-            message.add_text_content(discord_message.input_text)
+        input_text: str = discord_message.get_prompt_text()
+        input_image_url: str | None = discord_message.get_prompt_image_url()
 
-        if discord_message.input_image_url:
-            message.add_image_content(discord_message.input_image_url)
+        if input_text:
+            message.add_text_content(input_text)
+
+        if input_image_url:
+            message.add_image_content(input_image_url)
 
         return message
 

@@ -16,3 +16,4 @@ bot.yaml
 prompts.yaml
 *.log
 media_storage.json
+temp.*
