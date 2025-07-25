@@ -10,7 +10,7 @@ from discord.threads import Thread
 
 from gork_bot.message_parsing import ParsedMessage
 from gork_bot.config import BotConfig, AIConfig
-from gork_bot.bot_utils import UserInfo, ResponseHandler
+from gork_bot.response_handling import UserInfo, ResponseHandler
 
 
 class GorkBot(Client):
