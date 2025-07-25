@@ -27,6 +27,7 @@ CLIENT: OpenAI = OpenAI(api_key=OPENAI_API_KEY)
 class GPT_Model(Enum):
     GPT_4_1_MINI = "gpt-4.1-mini"
     GPT_4_O_MINI = "gpt-4o-mini"
+    GPT_4_1_NANO = "gpt-4.1-nano"
 
 
 class MessageRole(Enum):
@@ -190,12 +191,9 @@ class Input:
 
 
 class ResponseBuilder:
-    def __init__(
-        self, config: AIConfig, discord_messages: list[ParsedMessage], requestor: str
-    ):
+    def __init__(self, config: AIConfig, discord_messages: list[ParsedMessage]):
         self.__config: AIConfig = config
         self.__inputs: list[ParsedMessage] = discord_messages
-        self.__requestor: str = requestor
 
     def build_inputs(self, model_instructions: str) -> list[dict[str, Any]]:
         inputs: list[Input] = [
@@ -211,22 +209,29 @@ class ResponseBuilder:
 
         return [input.body for input in inputs]
 
-    def get_response(self) -> Response:
+    def get_response(self, requestor: str) -> Response:
         model_name: str = self.__config.model
         model_instructions: str = self.__config.get_instructions()
 
         if not model_name or not model_instructions:
             raise ValueError("Model and input must be set before getting a response.")
 
+        return self.request_response(
+            model=GPT_Model(model_name),
+            instructions=model_instructions,
+            metadata={"reason": "chat_completion", "requestor": requestor},
+        )
+
+    def request_response(
+        self, model: GPT_Model, instructions: str, metadata: dict[str, str] = {}
+    ) -> Response:
         response = CLIENT.responses.create(
-            model=model_name,
-            input=self.build_inputs(model_instructions),
+            model=model.value,
+            input=self.build_inputs(instructions),
             max_output_tokens=self.__config.max_tokens,
             temperature=self.__config.temperature,
             store=True,
-            metadata={
-                "requestor": self.__requestor,
-            },
+            metadata=metadata,
         )
 
         return Response(

@@ -94,6 +94,11 @@ class AIConfig(Config):
         self.temperature: float = self.get_config_value("temperature")
         self.max_tokens: int = self.get_config_value("max_tokens")
 
+        self.thread_name_generation_instructions: str = self.get_config_value(
+            "thread_name_generation_instructions"
+        )
+        self.thread_history_limit: int = self.get_config_value("thread_history_limit")
+
         self.post_media: bool = self.get_config_value("post_media")
         self.__default_media: dict[str, float | str] = self.get_config_value(
             "default_media"
@@ -128,6 +133,8 @@ class AIConfig(Config):
             "model": "gpt-4.1-mini",
             "temperature": 0.8,
             "max_tokens": 500,
+            "thread_name_generation_instructions": "",
+            "thread_history_limit": 10,
             "post_media": True,
             "default_media": {},
             "custom_media": {},

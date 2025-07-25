@@ -17,6 +17,11 @@ model: gpt-4.1-mini
 temperature: 0.8
 max_tokens: 500
 
+thread_name_generation_instructions: >
+  Generate a fitting name for a thread containing the following conversation. Make 
+  sure the name is concise and relevant to the topic of discussion. Merely state the
+  name without any additional text or quotation marks around it.
+thread_history_limit: 10
 # If the bot can post media, it will use these settings
 post_media: true
 default_media:

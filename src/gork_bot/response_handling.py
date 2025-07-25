@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any
 
 from gork_bot.config import BotConfig, AIConfig
-from gork_bot.ai_service import ResponseBuilder, Response
+from gork_bot.ai_service import ResponseBuilder, Response, GPT_Model
 from gork_bot.message_parsing import ParsedMessage
 
 
@@ -214,10 +214,14 @@ class ResponseHandler:
                 f"Unsupported ChannelType for reply response: {self.message.channel_type}"
             )
 
-        message_history: list[ParsedMessage] = await self.message.get_history()
+        message_history: list[ParsedMessage] = await self.message.get_history(
+            limit=self._ai_config.thread_history_limit
+        )
 
         if len(message_history) > 1:
-            await self.__create_thread(referenced_message=message_history[0])
+            await self.__create_thread(
+                referenced_message=message_history[0], message_history=message_history
+            )
             await self.__generate_response(message_history, should_reply=False)
         else:
             await self.__generate_response(message_history, should_reply=True)
@@ -237,7 +241,9 @@ class ResponseHandler:
                 f"Unsupported ChannelType for direct response: {self.message.channel_type}"
             )
 
-        message_history: list[ParsedMessage] = await self.message.get_history()
+        message_history: list[ParsedMessage] = await self.message.get_history(
+            limit=self._ai_config.thread_history_limit
+        )
         await self.__generate_response(
             message_history=message_history, should_reply=False
         )
@@ -247,13 +253,24 @@ class ResponseHandler:
         message_history: list[ParsedMessage],
         should_reply: bool,
     ) -> None:
+        """Generates a response based on the message history and sends it.
+
+        :param message_history: The history of messages in the channel or thread where the response is being sent.
+        :type message_history: list[ParsedMessage]
+        :param should_reply: If the response should be a direct reply to the original message, which means
+            that the original message is referenced. Defaults to False.
+        :type should_reply: bool
+        """
+
         response_builder: ResponseBuilder = ResponseBuilder(
             config=self._ai_config,
             discord_messages=message_history,
             requestor=self.message.author,
         )
 
-        response: Response = response_builder.get_response()
+        response: Response = response_builder.get_response(
+            requestor=self.message.author
+        )
         embed: Embed | None = (
             Embed().set_image(url=response.gif) if response.gif else None
         )
@@ -264,12 +281,37 @@ class ResponseHandler:
             embed=embed,
         )
 
-    async def __create_thread(self, referenced_message: ParsedMessage) -> Thread | None:
+    async def __create_thread(
+        self, referenced_message: ParsedMessage, message_history: list[ParsedMessage]
+    ) -> Thread | None:
+        """Creates a thread for follow-up discussion if the referenced message is from this bot.
+
+        :param referenced_message: The message that is being referenced for the thread creation.
+        :type referenced_message: ParsedMessage
+        :param message_history: The history of messages in the channel or thread where the response is being sent.
+            Used to generate the thread name.
+        :type message_history: list[ParsedMessage]
+        :return: The created thread object if the referenced message is from this bot, otherwise None.
+        :rtype: Thread | None
+        """
+
         if not referenced_message.from_this_bot:
             return None
 
-        # TODO: Make an AI request to generate a thread name based on the message content
-        thread_name = f"Follow-up Discussion with {self.message.author}"
+        response_builder: ResponseBuilder = ResponseBuilder(
+            config=self._ai_config,
+            discord_messages=message_history,
+            requestor=self.message.author,
+        )
+
+        thread_name = response_builder.request_response(
+            model=GPT_Model.GPT_4_1_NANO,
+            instructions=self._ai_config.thread_name_generation_instructions,
+            metadata={
+                "reason": "thread_name_generation",
+            },
+        ).get_text()
+
         thread = await self.message.message_snowflake.create_thread(
             name=thread_name,
             auto_archive_duration=60,
