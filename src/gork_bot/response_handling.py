@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any
 
 from gork_bot.config import BotConfig, AIConfig
-from gork_bot.ai_service import ResponseBuilder, Response, GPT_Model
+from gork_bot.ai_service import ResponseBuilder, Response, GPT_Model, RequestReason
 from gork_bot.message_parsing import ParsedMessage
 
 
@@ -19,6 +19,14 @@ class UserInfo:
     """Stores information about a user, including their ID, name, message count in the last hour for rate limiting purposes."""
 
     def __init__(self, user_id: int, name: str):
+        """Initializes the UserInfo with the user's ID and name.
+
+        :param user_id: The unique identifier for the user.
+        :type user_id: int
+        :param name: The name of the user.
+        :type name: str
+        """
+
         self.user_id: int = user_id
         self.name: str = name
         self.messages_in_last_hour: int = 0
@@ -28,8 +36,7 @@ class UserInfo:
         return f"UserInfo(user_id={self.user_id}, name='{self.name}', messages_in_last_hour={self.messages_in_last_hour}, last_message_time={self.last_message_time})"
 
     def update_message_stats(self, message: Message, config: BotConfig) -> bool:
-        """
-        Updates the message statistics for the user and checks if they are within the allowed limits.
+        """Updates the message statistics for the user and checks if they are within the allowed limits.
 
         :param message: The discord message sent by the user.
         :type message: Message
@@ -57,7 +64,7 @@ class UserInfo:
 
 
 class ResponseHandler:
-    """Handles sending responses to messages that the bot receives."""
+    """Handles the response generation and sending for messages received by the bot."""
 
     def __init__(
         self,
@@ -96,8 +103,7 @@ class ResponseHandler:
         delete_after: float | None = None,
         silent: bool = False,
     ) -> Message:
-        """
-        Sends a response to the channel the original message was sent to. The response can be sent as a
+        """Sends a response to the channel the original message was sent to. The response can be sent as a
         reply to the original message or as a new message in the same channel or thread.
 
         :param content: The content of the response message.
@@ -138,8 +144,7 @@ class ResponseHandler:
             )
 
     def __rate_limit_check(self) -> bool:
-        """
-        Checks if the user has exceeded the allowed number of messages in the last hour.
+        """Checks if the user has exceeded the allowed number of messages in the last hour.
 
         :return: True if the user is within the allowed limit, False otherwise.
         :rtype: bool
@@ -158,9 +163,9 @@ class ResponseHandler:
         )
 
     async def handle_response(self) -> None:
-        """
-        Handles the response based on the type of message received. It checks if the bot is in testing mode,
-        performs a rate limit check, and then determines the appropriate response based on the channel type.
+        """Handles the response based on the type of message received. It checks if the bot is
+        in testing mode, performs a rate limit check, and then determines the appropriate response
+        based on the channel type.
         """
         if self.__testing:
             await self.send_response(
@@ -202,10 +207,10 @@ class ResponseHandler:
                 )
 
     async def __handle_reply_response(self) -> None:
-        """
-        Handles a response which sends a message referencing the original message as a reply.
+        """Handles a response which sends a message referencing the original message as a reply.
 
-        This method handles the case where the bot is responding to the user in a public :class:`~discord.TextChannel`.
+        This method handles the case where the bot is responding to the user in a public
+        :class:`~discord.TextChannel`.
 
         :raises ValueError: If the channel type is not supported for reply responses.
         """
@@ -227,10 +232,10 @@ class ResponseHandler:
             await self.__generate_response(message_history, should_reply=True)
 
     async def __handle_direct_response(self) -> None:
-        """
-        Handles a response which sends a message without referencing the original message.
+        """Handles a response which sends a message without referencing the original message.
 
-        This method handles the case where the bot is responding directly to the user in a :class:`~discord.DMChannel` or :class:`~discord.Thread`.
+        This method handles the case where the bot is responding directly to the user in a
+        :class:`~discord.DMChannel` or :class:`~discord.Thread`.
         """
         if self.message.channel_type not in (
             ChannelType.private,
@@ -265,7 +270,6 @@ class ResponseHandler:
         response_builder: ResponseBuilder = ResponseBuilder(
             config=self._ai_config,
             discord_messages=message_history,
-            requestor=self.message.author,
         )
 
         response: Response = response_builder.get_response(
@@ -301,14 +305,13 @@ class ResponseHandler:
         response_builder: ResponseBuilder = ResponseBuilder(
             config=self._ai_config,
             discord_messages=message_history,
-            requestor=self.message.author,
         )
 
         thread_name = response_builder.request_response(
             model=GPT_Model.GPT_4_1_NANO,
             instructions=self._ai_config.thread_name_generation_instructions,
             metadata={
-                "reason": "thread_name_generation",
+                "reason": RequestReason.THREAD_NAME_GENERATION.value,
             },
         ).get_text()
 

@@ -20,11 +20,19 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 
 class ParsedYoutubeLinks:
+    """Class to parse YouTube video links from a message content."""
+
     __yt_video_id_pattern: re.Pattern = re.compile(
         r"(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{11})"
     )
 
     def __init__(self, content: str):
+        """Initializes the ParsedYoutubeLinks with the content of a Discord message.
+        Parses the content for YouTube video links and retrieves their titles using the YouTube Data API.
+
+        :param content: The content of the Discord message to parse for YouTube video links.
+        :type content: str
+        """
         self.video_ids: list[str] = set(self.__yt_video_id_pattern.findall(content))
 
         youtube = build("youtube", "v3", developerKey=GOOGLE_API_KEY)
@@ -37,6 +45,12 @@ class ParsedYoutubeLinks:
         ]
 
     def get_prompt_text(self) -> str:
+        """Generates a string representation of the YouTube video titles for use in
+        the chat history of prompts.
+
+        :return: A string containing the titles of the YouTube videos linked in the message.
+        :rtype: str
+        """
         if not self.video_titles:
             return ""
 

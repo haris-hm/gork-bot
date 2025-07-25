@@ -38,6 +38,14 @@ class MessageRole(Enum):
     TOOL = "tool"
 
 
+class RequestReason(Enum):
+    CHAT_COMPLETION = "chat_completion"
+    THREAD_NAME_GENERATION = "thread_name_generation"
+    IMAGE_GENERATION = "image_generation"
+    VIDEO_GENERATION = "video_generation"
+    AUDIO_GENERATION = "audio_generation"
+
+
 class Response:
     def __init__(self, text: str, media_store: CustomMediaStore):
         self.__keyword_tag_pattern: re.Pattern = re.compile(r"%%([^%]+)%%")
@@ -219,7 +227,10 @@ class ResponseBuilder:
         return self.request_response(
             model=GPT_Model(model_name),
             instructions=model_instructions,
-            metadata={"reason": "chat_completion", "requestor": requestor},
+            metadata={
+                "reason": RequestReason.CHAT_COMPLETION.value,
+                "requestor": requestor,
+            },
         )
 
     def request_response(
