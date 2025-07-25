@@ -10,7 +10,6 @@ from discord import (
     MessageReference,
     Thread,
     User,
-    Thread,
     TextChannel,
     DMChannel,
     ChannelType,
@@ -59,25 +58,6 @@ class ParsedAttachment:
         return None
 
 
-class ParsedChannelInfo:
-    def __init__(self, channel: TextChannel | DMChannel | Thread):
-        self.channel: TextChannel | DMChannel | Thread = channel
-        self.channel_id: int = channel.id
-        self.channel_name: str = (
-            channel.name if hasattr(channel, "name") else "DM Channel"
-        )
-        self.channel_type: ChannelType = channel.type
-
-        if isinstance(channel, Thread):
-            self.thread_id: int = channel.id
-            self.thread_name: str = channel.name
-            self.is_thread: bool = True
-        else:
-            self.thread_id = None
-            self.thread_name = None
-            self.is_thread: bool = False
-
-
 class ParsedMessage:
     __yt_url_pattern: re.Pattern = re.compile(
         r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/(watch\?v=|embed/|v/|shorts/)?([A-Za-z0-9_-]{11})",
@@ -85,17 +65,6 @@ class ParsedMessage:
     )
 
     def __init__(self, message: Message, bot_user: User):
-        if message.channel.type not in (
-            ChannelType.text,
-            ChannelType.private,
-            ChannelType.public_thread,
-            ChannelType.private_thread,
-        ):
-            raise ValueError(
-                f"Unsupported channel type: {message.channel.type}. "
-                "ParsedMessage can only be used with text, DM, or public/private thread channels."
-            )
-
         self.message_snowflake: Message = message
         self.bot_user: User = bot_user
 
@@ -104,6 +73,22 @@ class ParsedMessage:
         self.author: str = message.author.name
         self.content: str = message.content
         self.mentions: list[User] = message.mentions
+
+        self.channel: TextChannel | DMChannel | Thread = message.channel
+        self.channel_type: ChannelType = self.channel.type
+        self.thread: Thread | None = (
+            message.channel if isinstance(message.channel, Thread) else message.thread
+        )
+
+        if self.channel_type not in (
+            ChannelType.text,
+            ChannelType.private,
+            ChannelType.public_thread,
+        ):
+            raise ValueError(
+                f"Unsupported channel type: {self.channel.type}. "
+                "ParsedMessage can only be used with text, DM, or public thread channels."
+            )
 
         self.attachment: ParsedAttachment = ParsedAttachment(message)
         self.youtube_titles: ParsedYoutubeLinks | None = ParsedYoutubeLinks(
@@ -116,20 +101,13 @@ class ParsedMessage:
         for user in self.mentions:
             message_conent = message_conent.replace(f"<@{user.id}>", f"@{user.name}")
 
-        prompt_text: str = f"{self.author}: {message_conent}"
         if self.youtube_titles and self.youtube_titles.video_titles:
-            prompt_text += f" {self.youtube_titles.get_prompt_text()}"
+            message_conent += f" {self.youtube_titles.get_prompt_text()}"
 
-        return prompt_text.strip()
+        return message_conent.strip()
 
     def get_prompt_image_url(self) -> str | None:
         return self.attachment.image_url
-
-    def get_channel_info(self) -> ParsedChannelInfo:
-        """
-        Returns the channel information for the message.
-        """
-        return ParsedChannelInfo(self.message_snowflake.channel)
 
     async def get_history(self, limit: int = 10) -> list[Self]:
         """
@@ -137,11 +115,12 @@ class ParsedMessage:
         """
         message_history: list[Self] = [self]
 
-        if self.get_channel_info().is_thread:
-            message_history = [
-                ParsedMessage.parse(self.thread.client, msg)
-                async for msg in self.thread.history(limit=limit)
+        if isinstance(self.channel, (Thread, DMChannel)):
+            message_history: list[ParsedMessage] = [
+                ParsedMessage(msg, self.bot_user)
+                async for msg in self.channel.history(limit=limit)
             ]
+            message_history = reversed(message_history)
         elif (
             self.message_snowflake.reference
             and self.message_snowflake.reference.message_id

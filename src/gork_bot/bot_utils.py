@@ -12,7 +12,7 @@ from typing import Any
 
 from gork_bot.config import BotConfig, AIConfig
 from gork_bot.ai_requests import ResponseBuilder, Response
-from gork_bot.message_parsing import ParsedMessage, ParsedChannelInfo
+from gork_bot.message_parsing import ParsedMessage
 
 
 class UserInfo:
@@ -117,23 +117,23 @@ class ResponseHandler:
         :return: The sent Message object.
         :rtype: Message
         """
+        message: Message = self.message.message_snowflake
+        thread: Thread | None = message.thread
 
-        channel_info: ParsedChannelInfo = self.message.get_channel_info()
-
-        if should_reply and not channel_info.is_thread:
-            return await self.message.message_snowflake.reply(
+        if should_reply and not thread:
+            return await message.reply(
                 content=content,
                 mention_author=mention_author,
                 embed=embed,
                 delete_after=delete_after,
                 silent=silent,
             )
-        elif channel_info.is_thread or self.message.message_snowflake.thread:
-            return await self.message.message_snowflake.thread.send(
+        elif thread:
+            return await thread.send(
                 content=content, embed=embed, delete_after=delete_after, silent=silent
             )
         else:
-            return await channel_info.channel.send(
+            return await message.channel.send(
                 content=content, embed=embed, delete_after=delete_after, silent=silent
             )
 
@@ -177,16 +177,14 @@ class ResponseHandler:
                 silent=True,
             )
 
-        channel: TextChannel | DMChannel | Thread | Any = (
-            self.message.get_channel_info().channel
-        )
+        channel: TextChannel | DMChannel | Thread | Any = self.message.channel
 
-        match self.message.get_channel_info().channel_type:
+        match self.message.channel_type:
             case ChannelType.text:
                 if not (
                     self.message.bot_user in self.message.mentions
                     and self._bot_config.can_message_channel(
-                        channel=self.message.get_channel_info().channel
+                        channel=self.message.channel
                     )
                 ):
                     return
@@ -211,7 +209,7 @@ class ResponseHandler:
 
         :raises ValueError: If the channel type is not supported for reply responses.
         """
-        if self.message.get_channel_info().channel_type != ChannelType.text:
+        if self.message.channel_type != ChannelType.text:
             raise ValueError(
                 f"Unsupported ChannelType for reply response: {self.message.channel_type}"
             )
@@ -230,7 +228,7 @@ class ResponseHandler:
 
         This method handles the case where the bot is responding directly to the user in a :class:`~discord.DMChannel` or :class:`~discord.Thread`.
         """
-        if self.message.get_channel_info().channel_type not in (
+        if self.message.channel_type not in (
             ChannelType.private,
             ChannelType.public_thread,
             ChannelType.private_thread,

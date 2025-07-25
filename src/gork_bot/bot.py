@@ -36,14 +36,15 @@ class GorkBot(Client):
             return
 
         try:
+            response_handler: ResponseHandler = ResponseHandler(
+                message=ParsedMessage(message, self.user),
+                ai_config=self._ai_config,
+                bot_config=self._bot_config,
+                user_info=self._user_info,
+                testing=self.__testing,
+            )
+
             async with message.channel.typing():
-                response_handler: ResponseHandler = ResponseHandler(
-                    message=ParsedMessage(message, self.user),
-                    ai_config=self._ai_config,
-                    bot_config=self._bot_config,
-                    user_info=self._user_info,
-                    testing=self.__testing,
-                )
                 await response_handler.handle_response()
 
         except Exception:
