@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any
 
 from gork_bot.config import BotConfig, AIConfig
-from gork_bot.ai_requests import ResponseBuilder, Response
+from gork_bot.ai_service import ResponseBuilder, Response
 from gork_bot.message_parsing import ParsedMessage
 
 
