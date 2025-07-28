@@ -8,6 +8,7 @@ from discord import (
     ChannelType,
 )
 from datetime import datetime
+from functools import wraps
 from typing import Any
 
 from gork_bot.config import BotConfig, AIConfig
@@ -143,6 +144,22 @@ class ResponseHandler:
                 content=content, embed=embed, delete_after=delete_after, silent=silent
             )
 
+    def with_typing(func):
+        """Decorator to send a typing indicator while the response is being generated.
+
+        :param func: The function to be decorated.
+        :type func: Callable
+        :return: The wrapped function that sends a typing indicator.
+        :rtype: Callable
+        """
+
+        @wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            async with self.message.message_snowflake.channel.typing():
+                return await func(self, *args, **kwargs)
+
+        return wrapper
+
     def __rate_limit_check(self) -> bool:
         """Checks if the user has exceeded the allowed number of messages in the last hour.
 
@@ -206,6 +223,7 @@ class ResponseHandler:
                     f"Unsupported ChannelType encountered: {self.message.channel_type}"
                 )
 
+    @with_typing
     async def __handle_reply_response(self) -> None:
         """Handles a response which sends a message referencing the original message as a reply.
 
@@ -231,6 +249,7 @@ class ResponseHandler:
         else:
             await self.__generate_response(message_history, should_reply=True)
 
+    @with_typing
     async def __handle_direct_response(self) -> None:
         """Handles a response which sends a message without referencing the original message.
 

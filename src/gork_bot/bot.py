@@ -44,8 +44,7 @@ class GorkBot(Client):
                 testing=self.__testing,
             )
 
-            async with message.channel.typing():
-                await response_handler.handle_response()
+            await response_handler.handle_response()
 
         except Exception:
             if isinstance(
