@@ -1,16 +1,12 @@
 import traceback
 
-from discord import (
-    Intents,
-    Message,
-    Client,
-    DMChannel,
-)
-from discord.threads import Thread
+from discord import Intents, Message, Client, DMChannel, Thread, Activity
+from asyncio import create_task, sleep
 
 from gork_bot.message_parsing import ParsedMessage
 from gork_bot.config import BotConfig, AIConfig
 from gork_bot.response_handling import UserInfo, ResponseHandler
+from gork_bot.resource_handling import PresenceMessageStore
 
 
 class GorkBot(Client):
@@ -30,6 +26,9 @@ class GorkBot(Client):
         self._bot_config = BotConfig(bot_config_path)
 
         super().__init__(intents=intents)
+
+    async def setup_hook(self):
+        self.presence_task = create_task(self._update_presence())
 
     async def on_message(self, message: Message):
         if message.author == self.user:
@@ -60,3 +59,17 @@ class GorkBot(Client):
             print(
                 f"Error processing message from {message.author.name}: {traceback.format_exc()}"
             )
+
+    async def _update_presence(self):
+        await self.wait_until_ready()
+        presence_store = PresenceMessageStore(self._bot_config.presence_message_path)
+
+        while True:
+            try:
+                presence_message: Activity = (
+                    presence_store.get_random_presence_message()
+                )
+                await self.change_presence(activity=presence_message)
+            except Exception as e:
+                print(f"Error updating presence: {e}")
+            await sleep(self._bot_config.presence_message_interval_mins * 60)

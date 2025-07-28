@@ -220,6 +220,14 @@ class ResponseHandler:
 
                 await self.__handle_reply_response()
             case ChannelType.private:
+                if not self._bot_config.can_respond_to_dm:
+                    await self.send_response(
+                        content="Direct messages are disabled for this bot.",
+                        delete_after=60,
+                        silent=True,
+                    )
+                    return
+
                 await self.__handle_direct_response()
             case ChannelType.public_thread | ChannelType.private_thread:
                 if not channel.owner or channel.owner != self.message.bot_user:

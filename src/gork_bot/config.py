@@ -6,7 +6,7 @@ from discord import User, TextChannel
 from typing import Any
 from abc import ABC, abstractmethod
 
-from gork_bot.media_manager import CustomMediaStore
+from gork_bot.resource_handling import CustomMediaStore
 
 
 class Config(ABC):
@@ -60,6 +60,11 @@ class BotConfig(Config):
 
         self.can_respond_to_dm: bool = self.get_config_value("can_respond_to_dm")
 
+        self.presence_message_path: str = self.get_config_value("presence_message_path")
+        self.presence_message_interval_mins: int = self.get_config_value(
+            "presence_message_interval_mins"
+        )
+
     def define_defaults(self) -> dict[str, Any]:
         return {
             "admins": [],
@@ -68,6 +73,8 @@ class BotConfig(Config):
             "allowed_messages_per_interval": 30,
             "timeout_interval_mins": 10,
             "can_respond_to_dm": True,
+            "presence_message_path": "resources/default_presence_message_storage.json",
+            "presence_message_interval_mins": 60,
         }
 
     def is_admin(self, user: User) -> bool:

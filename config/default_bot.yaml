@@ -13,3 +13,6 @@ allowed_messages_per_interval: 30
 timeout_interval_mins: 10
 
 can_respond_to_dm: true
+
+presence_message_path: "resources/default_presence_message_storage.json"
+presence_message_interval_mins: 60

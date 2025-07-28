@@ -16,4 +16,5 @@ bot.yaml
 prompts.yaml
 *.log
 media_storage.json
+presence_message_storage.json
 temp.*

@@ -15,7 +15,7 @@ from discord import ChannelType
 
 from gork_bot.config import AIConfig
 from gork_bot.message_parsing import ParsedMessage
-from gork_bot.media_manager import CustomMediaStore
+from gork_bot.resource_handling import CustomMediaStore
 
 dotenv.load_dotenv()
 OPENAI_API_KEY: str = os.getenv("OPENAI_KEY")
