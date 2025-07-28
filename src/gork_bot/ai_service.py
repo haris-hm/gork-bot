@@ -11,6 +11,7 @@ from io import BytesIO
 from base64 import b64encode
 from enum import Enum
 from typing import Any, Self
+from discord import ChannelType
 
 from gork_bot.config import AIConfig
 from gork_bot.message_parsing import ParsedMessage
@@ -44,6 +45,44 @@ class RequestReason(Enum):
     IMAGE_GENERATION = "image_generation"
     VIDEO_GENERATION = "video_generation"
     AUDIO_GENERATION = "audio_generation"
+
+
+class DiscordLocation(Enum):
+    CHANNEL = "channel"
+    DM = "dm"
+    THREAD = "thread"
+    UNKNOWN = "unknown"
+
+    @classmethod
+    def from_channel(cls, channel_type: ChannelType) -> Self:
+        """
+        Converts a channel type string to a DiscordLocation enum.
+        """
+        match channel_type:
+            case ChannelType.private:
+                return cls.DM
+            case ChannelType.public_thread | ChannelType.private_thread:
+                return cls.THREAD
+            case ChannelType.text:
+                return cls.CHANNEL
+            case _:
+                return cls.UNKNOWN
+
+
+class Metadata:
+    def __init__(
+        self, reason: RequestReason, location: DiscordLocation, requestor: str
+    ):
+        self.reason: RequestReason = reason
+        self.requestor: str = requestor
+        self.location: DiscordLocation = location
+
+    def get_metadata(self) -> dict[str, str]:
+        return {
+            "reason": self.reason.value,
+            "location": self.location.value,
+            "requestor": self.requestor,
+        }
 
 
 class Response:
@@ -217,9 +256,14 @@ class ResponseBuilder:
 
         return [input.body for input in inputs]
 
-    def get_response(self, requestor: str) -> Response:
+    def get_response(self, requestor: str, location: DiscordLocation) -> Response:
         model_name: str = self.__config.model
         model_instructions: str = self.__config.get_instructions()
+        metadata: Metadata = Metadata(
+            reason=RequestReason.CHAT_COMPLETION,
+            location=location,
+            requestor=requestor,
+        )
 
         if not model_name or not model_instructions:
             raise ValueError("Model and input must be set before getting a response.")
@@ -227,14 +271,14 @@ class ResponseBuilder:
         return self.request_response(
             model=GPT_Model(model_name),
             instructions=model_instructions,
-            metadata={
-                "reason": RequestReason.CHAT_COMPLETION.value,
-                "requestor": requestor,
-            },
+            metadata=metadata,
         )
 
     def request_response(
-        self, model: GPT_Model, instructions: str, metadata: dict[str, str] = {}
+        self,
+        model: GPT_Model,
+        instructions: str,
+        metadata: Metadata,
     ) -> Response:
         response = CLIENT.responses.create(
             model=model.value,
@@ -242,7 +286,7 @@ class ResponseBuilder:
             max_output_tokens=self.__config.max_tokens,
             temperature=self.__config.temperature,
             store=True,
-            metadata=metadata,
+            metadata=metadata.get_metadata(),
         )
 
         return Response(

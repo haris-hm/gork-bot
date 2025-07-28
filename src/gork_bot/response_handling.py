@@ -12,7 +12,14 @@ from functools import wraps
 from typing import Any
 
 from gork_bot.config import BotConfig, AIConfig
-from gork_bot.ai_service import ResponseBuilder, Response, GPT_Model, RequestReason
+from gork_bot.ai_service import (
+    ResponseBuilder,
+    Response,
+    GPT_Model,
+    RequestReason,
+    DiscordLocation,
+    Metadata,
+)
 from gork_bot.message_parsing import ParsedMessage
 
 
@@ -292,7 +299,8 @@ class ResponseHandler:
         )
 
         response: Response = response_builder.get_response(
-            requestor=self.message.author
+            requestor=self.message.author,
+            location=DiscordLocation.from_channel(self.message.channel_type),
         )
         embed: Embed | None = (
             Embed().set_image(url=response.gif) if response.gif else None
@@ -330,9 +338,11 @@ class ResponseHandler:
             response_builder.request_response(
                 model=GPT_Model.GPT_4_1_NANO,
                 instructions=self._ai_config.thread_name_generation_instructions,
-                metadata={
-                    "reason": RequestReason.THREAD_NAME_GENERATION.value,
-                },
+                metadata=Metadata(
+                    reason=RequestReason.THREAD_NAME_GENERATION,
+                    location=DiscordLocation.THREAD,
+                    requestor="Gork Bot",
+                ),
             )
             .get_text()
             .replace('"', "")
