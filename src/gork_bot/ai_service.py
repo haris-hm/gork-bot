@@ -1,11 +1,8 @@
 import requests
 import json
 import random
-import dotenv
-import os
 import re
 
-from openai import OpenAI
 from PIL import Image
 from io import BytesIO
 from base64 import b64encode
@@ -13,16 +10,10 @@ from enum import Enum
 from typing import Any, Self
 from discord import ChannelType
 
+from gork_bot import CLIENT_KEY, GOOGLE_API_KEY, OAI_CLIENT
 from gork_bot.config import AIConfig
 from gork_bot.message_parsing import ParsedMessage
 from gork_bot.resource_handling import CustomMediaStore
-
-dotenv.load_dotenv()
-OPENAI_API_KEY: str = os.getenv("OPENAI_KEY")
-GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY")
-CLIENT_KEY: str = os.getenv("CLIENT_KEY", "gork_bot")
-
-CLIENT: OpenAI = OpenAI(api_key=OPENAI_API_KEY)
 
 
 class GPT_Model(Enum):
@@ -280,7 +271,7 @@ class ResponseBuilder:
         instructions: str,
         metadata: Metadata,
     ) -> Response:
-        response = CLIENT.responses.create(
+        response = OAI_CLIENT.responses.create(
             model=model.value,
             input=self.build_inputs(instructions),
             max_output_tokens=self.__config.max_tokens,

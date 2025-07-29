@@ -1,6 +1,4 @@
 import re
-import dotenv
-import os
 
 from googleapiclient.discovery import build
 from typing import Self
@@ -15,8 +13,7 @@ from discord import (
     ChannelType,
 )
 
-dotenv.load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+from gork_bot import GOOGLE_API_KEY
 
 
 class ParsedYoutubeLinks:

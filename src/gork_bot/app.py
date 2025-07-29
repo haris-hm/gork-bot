@@ -1,10 +1,5 @@
-import dotenv
-import os
-
+from gork_bot import DISCORD_TOKEN
 from gork_bot.bot import GorkBot
-
-dotenv.load_dotenv()
-DISCORD_TOKEN: str = os.getenv("DISCORD_TOKEN")
 
 
 def main():
