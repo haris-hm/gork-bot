@@ -1,3 +1,4 @@
+from datetime import datetime
 import re
 
 from discord import (
@@ -14,6 +15,8 @@ from googleapiclient.discovery import build
 from typing import Self
 
 from gork_bot import GOOGLE_API_KEY
+
+from gork_bot.resource_management.config import BotConfig
 
 
 class ParsedYoutubeLinks:
@@ -151,3 +154,51 @@ class ParsedMessage:
 
     def __repr__(self) -> str:
         return f"ParsedMessage(author={self.author}, content={self.content})"
+
+
+class UserInfo:
+    """Stores information about a user, including their ID, name, message count in the last hour for rate limiting purposes."""
+
+    def __init__(self, user_id: int, name: str):
+        """Initializes the UserInfo with the user's ID and name.
+
+        :param user_id: The unique identifier for the user.
+        :type user_id: int
+        :param name: The name of the user.
+        :type name: str
+        """
+
+        self.user_id: int = user_id
+        self.name: str = name
+        self.messages_in_last_hour: int = 0
+        self.last_message_time: datetime | None = None
+
+    def __repr__(self):
+        return f"UserInfo(user_id={self.user_id}, name='{self.name}', messages_in_last_hour={self.messages_in_last_hour}, last_message_time={self.last_message_time})"
+
+    def update_message_stats(self, message: Message, config: BotConfig) -> bool:
+        """Updates the message statistics for the user and checks if they are within the allowed limits.
+
+        :param message: The discord message sent by the user.
+        :type message: Message
+        :param config: The bot configuration containing rate limit settings.
+        :type config: BotConfig
+        :return: True if the user is within the allowed message limits, False otherwise.
+        :rtype: bool
+        """
+        if config.is_admin(message.author):
+            return True
+
+        message_time: datetime = message.created_at
+
+        if (
+            self.last_message_time is None
+            or (message_time - self.last_message_time).total_seconds()
+            > 60 * config.timeout_interval_mins
+        ):
+            self.messages_in_last_hour = 1
+            self.last_message_time = message_time
+        else:
+            self.messages_in_last_hour += 1
+
+        return self.messages_in_last_hour <= config.allowed_messages_per_interval

@@ -3,10 +3,11 @@ import traceback
 from discord import Activity, Client, DMChannel, Intents, Message, Thread
 from asyncio import create_task, sleep
 
-from gork_bot.message_parsing import ParsedMessage
-from gork_bot.config import AIConfig, BotConfig
-from gork_bot.response_handling import ResponseHandler, UserInfo
-from gork_bot.resource_handling import PresenceMessageStore
+from gork_bot.resource_management.config import AIConfig, BotConfig
+from gork_bot.resource_management.resource_stores import PresenceMessageStore
+
+from gork_bot.response_handling.types import ParsedMessage, UserInfo
+from gork_bot.response_handling.responses import ResponseHandler
 
 
 class GorkBot(Client):

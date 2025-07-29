@@ -1,11 +1,14 @@
 from typing import Any
 
 from gork_bot import OAI_CLIENT
+
 from gork_bot.ai_service.types import Input, Metadata, Response
 from gork_bot.ai_service.enums import DiscordLocation
 from gork_bot.ai_service.enums import GPT_Model, MessageRole, RequestReason
-from gork_bot.config import AIConfig
-from gork_bot.message_parsing import ParsedMessage
+
+from gork_bot.resource_management.config import AIConfig
+
+from gork_bot.response_handling.types import ParsedMessage
 
 
 class ResponseBuilder:

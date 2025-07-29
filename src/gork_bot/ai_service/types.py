@@ -9,9 +9,12 @@ from PIL import Image
 from typing import Any, Self
 
 from gork_bot import CLIENT_KEY, GOOGLE_API_KEY
+
 from gork_bot.ai_service.enums import DiscordLocation, MessageRole, RequestReason
-from gork_bot.message_parsing import ParsedMessage
-from gork_bot.resource_handling import CustomMediaStore
+
+from gork_bot.resource_management.resource_stores import CustomMediaStore
+
+from gork_bot.response_handling.types import ParsedMessage
 
 
 class Metadata:

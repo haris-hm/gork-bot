@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from discord import User, TextChannel
 from typing import Any
 
-from gork_bot.resource_handling import CustomMediaStore
+from gork_bot.resource_management.resource_stores import CustomMediaStore
 
 
 class Config(ABC):
