@@ -1,25 +1,21 @@
-from discord import (
-    Message,
-    Thread,
-    Embed,
-    User,
-    DMChannel,
-    TextChannel,
-    ChannelType,
-)
 from datetime import datetime
+from discord import (
+    ChannelType,
+    DMChannel,
+    Embed,
+    Message,
+    TextChannel,
+    Thread,
+    User,
+)
 from functools import wraps
 from typing import Any
 
+from gork_bot.ai_service.types import Metadata, Response
+from gork_bot.ai_service.enums import DiscordLocation, GPT_Model, RequestReason
+from gork_bot.ai_service.requests import ResponseBuilder
+
 from gork_bot.config import BotConfig, AIConfig
-from gork_bot.ai_service import (
-    ResponseBuilder,
-    Response,
-    GPT_Model,
-    RequestReason,
-    DiscordLocation,
-    Metadata,
-)
 from gork_bot.message_parsing import ParsedMessage
 
 

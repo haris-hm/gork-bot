@@ -1,10 +1,10 @@
 import random
-import yaml
 import os
+import yaml
 
+from abc import ABC, abstractmethod
 from discord import User, TextChannel
 from typing import Any
-from abc import ABC, abstractmethod
 
 from gork_bot.resource_handling import CustomMediaStore
 

@@ -1,17 +1,17 @@
 import re
 
-from googleapiclient.discovery import build
-from typing import Self
 from discord import (
     Attachment,
+    ChannelType,
+    DMChannel,
     Message,
     MessageReference,
     Thread,
-    User,
     TextChannel,
-    DMChannel,
-    ChannelType,
+    User,
 )
+from googleapiclient.discovery import build
+from typing import Self
 
 from gork_bot import GOOGLE_API_KEY
 

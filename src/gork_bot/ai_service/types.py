@@ -1,63 +1,17 @@
-import requests
 import json
 import random
 import re
+import requests
 
-from PIL import Image
-from io import BytesIO
 from base64 import b64encode
-from enum import Enum
+from io import BytesIO
+from PIL import Image
 from typing import Any, Self
-from discord import ChannelType
 
-from gork_bot import CLIENT_KEY, GOOGLE_API_KEY, OAI_CLIENT
-from gork_bot.config import AIConfig
+from gork_bot import CLIENT_KEY, GOOGLE_API_KEY
+from gork_bot.ai_service.enums import DiscordLocation, MessageRole, RequestReason
 from gork_bot.message_parsing import ParsedMessage
 from gork_bot.resource_handling import CustomMediaStore
-
-
-class GPT_Model(Enum):
-    GPT_4_1_MINI = "gpt-4.1-mini"
-    GPT_4_O_MINI = "gpt-4o-mini"
-    GPT_4_1_NANO = "gpt-4.1-nano"
-
-
-class MessageRole(Enum):
-    USER = "user"
-    ASSISTANT = "assistant"
-    SYSTEM = "system"
-    DEVELOPER = "developer"
-    TOOL = "tool"
-
-
-class RequestReason(Enum):
-    CHAT_COMPLETION = "chat_completion"
-    THREAD_NAME_GENERATION = "thread_name_generation"
-    IMAGE_GENERATION = "image_generation"
-    VIDEO_GENERATION = "video_generation"
-    AUDIO_GENERATION = "audio_generation"
-
-
-class DiscordLocation(Enum):
-    CHANNEL = "channel"
-    DM = "dm"
-    THREAD = "thread"
-    UNKNOWN = "unknown"
-
-    @classmethod
-    def from_channel(cls, channel_type: ChannelType) -> Self:
-        """
-        Converts a channel type string to a DiscordLocation enum.
-        """
-        match channel_type:
-            case ChannelType.private:
-                return cls.DM
-            case ChannelType.public_thread | ChannelType.private_thread:
-                return cls.THREAD
-            case ChannelType.text:
-                return cls.CHANNEL
-            case _:
-                return cls.UNKNOWN
 
 
 class Metadata:
@@ -226,61 +180,3 @@ class Input:
 
     def __repr__(self):
         return f"Message(role={self.body['role']}, content={self.body['content']})"
-
-
-class ResponseBuilder:
-    def __init__(self, config: AIConfig, discord_messages: list[ParsedMessage]):
-        self.__config: AIConfig = config
-        self.__inputs: list[ParsedMessage] = discord_messages
-
-    def build_inputs(self, model_instructions: str) -> list[dict[str, Any]]:
-        inputs: list[Input] = [
-            Input.from_string(content=model_instructions, role=MessageRole.DEVELOPER)
-        ]
-
-        for input in self.__inputs:
-            inputs.append(
-                Input.from_parsed_message(
-                    input,
-                )
-            )
-
-        return [input.body for input in inputs]
-
-    def get_response(self, requestor: str, location: DiscordLocation) -> Response:
-        model_name: str = self.__config.model
-        model_instructions: str = self.__config.get_instructions()
-        metadata: Metadata = Metadata(
-            reason=RequestReason.CHAT_COMPLETION,
-            location=location,
-            requestor=requestor,
-        )
-
-        if not model_name or not model_instructions:
-            raise ValueError("Model and input must be set before getting a response.")
-
-        return self.request_response(
-            model=GPT_Model(model_name),
-            instructions=model_instructions,
-            metadata=metadata,
-        )
-
-    def request_response(
-        self,
-        model: GPT_Model,
-        instructions: str,
-        metadata: Metadata,
-    ) -> Response:
-        response = OAI_CLIENT.responses.create(
-            model=model.value,
-            input=self.build_inputs(instructions),
-            max_output_tokens=self.__config.max_tokens,
-            temperature=self.__config.temperature,
-            store=True,
-            metadata=metadata.get_metadata(),
-        )
-
-        return Response(
-            response.output_text,
-            self.__config.media_store,
-        )
