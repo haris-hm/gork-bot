@@ -303,7 +303,6 @@ class ResponseHandler:
                 ),
             )
             .get_text()
-            .replace('"', "")
             .strip()
         )
         thread_name = thread_name[:100]  # Limit thread name to 100 characters
