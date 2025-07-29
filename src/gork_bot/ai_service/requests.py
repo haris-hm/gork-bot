@@ -46,6 +46,8 @@ class ResponseBuilder:
             model=GPT_Model(model_name),
             instructions=model_instructions,
             metadata=metadata,
+            max_output_tokens=self.__config.max_tokens,
+            temperature=self.__config.temperature,
         )
 
     def request_response(
@@ -53,14 +55,16 @@ class ResponseBuilder:
         model: GPT_Model,
         instructions: str,
         metadata: Metadata,
+        max_output_tokens: int,
+        temperature: float,
     ) -> Response:
         response = OAI_CLIENT.responses.create(
             model=model.value,
             input=self.build_inputs(instructions),
-            max_output_tokens=self.__config.max_tokens,
-            temperature=self.__config.temperature,
-            store=True,
+            max_output_tokens=max_output_tokens,
+            temperature=temperature,
             metadata=metadata.get_metadata(),
+            store=True,
         )
 
         return Response(

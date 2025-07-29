@@ -109,7 +109,7 @@ class ResponseHandler:
 
         @wraps(func)
         async def wrapper(self, *args, **kwargs):
-            async with self.message.message_snowflake.channel.typing():
+            async with self.message.channel.typing():
                 return await func(self, *args, **kwargs)
 
         return wrapper
@@ -289,10 +289,13 @@ class ResponseHandler:
             discord_messages=message_history,
         )
 
+        thread_name_instructions: str = f"# Identity\n\n {self._ai_config.thread_name_generation_identity}\n # Instructions\n\n {self._ai_config.thread_name_generation_instructions}"
         thread_name = (
             response_builder.request_response(
-                model=GPT_Model.GPT_4_1_NANO,
-                instructions=self._ai_config.thread_name_generation_instructions,
+                model=GPT_Model.GPT_4_1_MINI,
+                instructions=thread_name_instructions,
+                max_output_tokens=16,
+                temperature=0.25,
                 metadata=Metadata(
                     reason=RequestReason.THREAD_NAME_GENERATION,
                     location=DiscordLocation.THREAD,
@@ -303,10 +306,13 @@ class ResponseHandler:
             .replace('"', "")
             .strip()
         )
+        thread_name = thread_name[:100]  # Limit thread name to 100 characters
 
         thread = await self.message.message_snowflake.create_thread(
             name=thread_name,
             auto_archive_duration=60,
             reason="Creating a thread for follow-up discussion.",
         )
+        self.message.channel = thread
+
         return thread
