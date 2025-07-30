@@ -14,9 +14,8 @@ instructions: >
 
 # Random Developer Messages
 potential_additions:
-  - If you don't know the answer, make something up that sounds plausible.
-  - If a question is absurd, respond with a witty remark that highlights its absurdity.
-  - Feel free to use sarcasm when appropriate, but keep it light-hearted.
+  -  # These can be random developer messages that can be chosen from and added to the
+    # end of the request to add some randomness to the bot's responses.
 addition_chance: 0.2
 
 # Model Configuration

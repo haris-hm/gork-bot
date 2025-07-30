@@ -101,7 +101,7 @@ class Input:
         self.body: dict[str, Any] = {"role": role.value, "content": []}
 
     @classmethod
-    def from_parsed_message(cls, discord_message: ParsedMessage) -> Self:
+    def from_parsed_message(cls, discord_message: ParsedMessage) -> list[Self]:
         """
         Creates a Message instance from a ParsedMessage.
         """
@@ -112,15 +112,28 @@ class Input:
         )
 
         input_text: str = discord_message.get_prompt_text()
-        input_image_url: str | None = discord_message.get_prompt_image_url()
+        input_image_urls: list[str] = discord_message.get_prompt_image_urls()
 
         if input_text:
             message._add_text_content(input_text)
 
-        if input_image_url:
-            message._add_image_content(input_image_url)
+        if input_image_urls:
+            for image_url in input_image_urls:
+                message._add_image_content(image_url)
 
-        return message
+        inputs: list[Input] = [message]
+
+        if discord_message.attachment.embeds:
+            for embed in discord_message.attachment.embeds:
+                embed_message = cls(role=MessageRole.USER)
+                embed_message._add_text_content(
+                    f"[The user linked external content in their previous message: {embed.get_prompt_text()}.]"
+                )
+                if embed.image_url:
+                    embed_message._add_image_content(embed.image_url)
+                inputs.append(embed_message)
+
+        return inputs
 
     @classmethod
     def from_string(cls, content: str, role: MessageRole = MessageRole.USER) -> Self:

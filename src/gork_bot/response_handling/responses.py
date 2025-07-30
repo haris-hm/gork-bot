@@ -202,14 +202,15 @@ class ResponseHandler:
         message_history: list[ParsedMessage] = await self.message.get_history(
             limit=self._ai_config.thread_history_limit
         )
+        should_reply: bool = True
 
         if len(message_history) > 1:
-            await self.__create_thread(
+            thread: Thread | None = await self.__create_thread(
                 referenced_message=message_history[0], message_history=message_history
             )
-            await self.__generate_response(message_history, should_reply=False)
-        else:
-            await self.__generate_response(message_history, should_reply=True)
+            should_reply = thread is None
+
+        await self.__generate_response(message_history, should_reply=should_reply)
 
     @with_typing
     async def __handle_direct_response(self) -> None:

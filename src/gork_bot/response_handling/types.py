@@ -5,76 +5,103 @@ from discord import (
     Attachment,
     ChannelType,
     DMChannel,
+    Embed,
     Message,
     MessageReference,
     Thread,
     TextChannel,
     User,
 )
-from googleapiclient.discovery import build
 from typing import Self
-
-from gork_bot import GOOGLE_API_KEY
+from enum import Enum
 
 from gork_bot.resource_management.config import BotConfig
 
+YT_LINK_PATTERN: re.Pattern = re.compile(
+    r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/(watch\?v=|embed/|v/|shorts/)?([A-Za-z0-9_-]{11})",
+    re.IGNORECASE,
+)
+TWITTER_LINK_PATTERN: re.Pattern = re.compile(
+    r"(https?://)?(www\.)?(twitter\.com|x\.com)/([A-Za-z0-9_]+)/status/(\d+)",
+    re.IGNORECASE,
+)
 
-class ParsedYoutubeLinks:
-    """Class to parse YouTube video links from a message content."""
 
-    __yt_video_id_pattern: re.Pattern = re.compile(
-        r"(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{11})"
-    )
+class EmbedType(Enum):
+    YOUTUBE = "youtube"
+    TWITTER = "twitter"
+    UNKNOWN = "unknown"
 
-    def __init__(self, content: str):
-        """Initializes the ParsedYoutubeLinks with the content of a Discord message.
-        Parses the content for YouTube video links and retrieves their titles using the YouTube Data API.
 
-        :param content: The content of the Discord message to parse for YouTube video links.
-        :type content: str
-        """
-        self.video_ids: list[str] = set(self.__yt_video_id_pattern.findall(content))
+class ParsedEmbed:
+    def __init__(self, embed: Embed):
+        self.embed_type: EmbedType = self.__determine_embed_type(embed)
 
-        youtube = build("youtube", "v3", developerKey=GOOGLE_API_KEY)
-        response = (
-            youtube.videos().list(part="snippet", id=",".join(self.video_ids)).execute()
-        )
+        if self.embed_type != EmbedType.UNKNOWN:
+            self.author: str = embed.author.name if embed.author else "Unknown"
 
-        self.video_titles = [
-            f"{item['snippet']['title']}" for item in response.get("items", [])
-        ]
+            self.content: str = ""
+            self.image_url: str = ""
+
+            match self.embed_type:
+                case EmbedType.YOUTUBE:
+                    self.content = embed.title if embed.title else "No Title"
+                    self.image_url = embed.thumbnail.url if embed.thumbnail else ""
+                case EmbedType.TWITTER:
+                    self.content = (
+                        embed.description if embed.description else "No Description"
+                    )
+                    self.image_url = embed.image.url if embed.image else ""
+
+    def __determine_embed_type(self, embed: Embed) -> EmbedType:
+        if embed.url and re.match(YT_LINK_PATTERN, embed.url):
+            return EmbedType.YOUTUBE
+        elif embed.url and re.match(TWITTER_LINK_PATTERN, embed.url):
+            return EmbedType.TWITTER
+        return EmbedType.UNKNOWN
 
     def get_prompt_text(self) -> str:
-        """Generates a string representation of the YouTube video titles for use in
-        the chat history of prompts.
-
-        :return: A string containing the titles of the YouTube videos linked in the message.
-        :rtype: str
-        """
-        if not self.video_titles:
-            return ""
-
-        titles = ", ".join(self.video_titles)
-        return f"(Linked YouTube video(s): {titles})" if titles else ""
+        match self.embed_type:
+            case EmbedType.YOUTUBE:
+                return f"YouTube video by {self.author} titled '{self.content}'"
+            case EmbedType.TWITTER:
+                return (
+                    f"Twitter post by {self.author} with the contents: '{self.content}'"
+                )
+            case EmbedType.UNKNOWN:
+                return ""
 
 
 class ParsedAttachment:
     def __init__(self, message: Message):
-        self.image_url: str | None = self.__get_image_attachment(message.attachments)
+        self.image_urls: list[str] = self.__get_image_attachment(message.attachments)
+        self.embeds: list[ParsedEmbed] = []
+        if message.embeds:
+            self.embeds = self.__parse_embeds(message.embeds)
 
-    def __get_image_attachment(self, attachments: list[Attachment]) -> dict[str, str]:
-        pattern = re.compile(r".*\.(jpg|jpeg|png|webp)$", re.IGNORECASE)
+    def __get_image_attachment(self, attachments: list[Attachment]) -> list[str]:
+        image_urls: list[str] = []
+        image_file_pattern = re.compile(r".*\.(jpg|jpeg|png|webp)$", re.IGNORECASE)
 
         for attachment in attachments:
-            if pattern.match(attachment.filename):
-                return attachment.url
+            if image_file_pattern.match(attachment.filename):
+                image_urls.append(attachment.url)
 
-        return None
+        return image_urls
+
+    def __parse_embeds(self, embeds: list[Embed]) -> list[ParsedEmbed]:
+        parsed_embeds: list[ParsedEmbed] = []
+        for embed in embeds:
+            parsed_embed: ParsedEmbed = ParsedEmbed(embed)
+            if parsed_embed.embed_type != EmbedType.UNKNOWN:
+                parsed_embeds.append(parsed_embed)
+
+        return parsed_embeds
 
 
 class ParsedMessage:
-    __yt_url_pattern: re.Pattern = re.compile(
-        r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/(watch\?v=|embed/|v/|shorts/)?([A-Za-z0-9_-]{11})",
+    __embed_url_pattern: re.Pattern = re.compile(
+        f"{YT_LINK_PATTERN.pattern}|{TWITTER_LINK_PATTERN.pattern}",
         re.IGNORECASE,
     )
 
@@ -105,23 +132,17 @@ class ParsedMessage:
             )
 
         self.attachment: ParsedAttachment = ParsedAttachment(message)
-        self.youtube_titles: ParsedYoutubeLinks | None = ParsedYoutubeLinks(
-            message.content
-        )
 
     def get_prompt_text(self) -> str:
-        message_conent: str = re.sub(self.__yt_url_pattern, "", self.content.strip())
+        message_conent: str = re.sub(self.__embed_url_pattern, "", self.content.strip())
 
         for user in self.mentions:
             message_conent = message_conent.replace(f"<@{user.id}>", f"@{user.name}")
 
-        if self.youtube_titles and self.youtube_titles.video_titles:
-            message_conent += f" {self.youtube_titles.get_prompt_text()}"
-
         return message_conent.strip()
 
-    def get_prompt_image_url(self) -> str | None:
-        return self.attachment.image_url
+    def get_prompt_image_urls(self) -> str | None:
+        return self.attachment.image_urls
 
     async def get_history(self, limit: int = 10) -> list[Self]:
         """

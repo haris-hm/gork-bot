@@ -31,7 +31,7 @@ class ResponseBuilder:
 
         # Exclude last message to add developer messages before it
         for message in messages[:-1]:
-            inputs.append(
+            inputs.extend(
                 Input.from_parsed_message(
                     message,
                 )
@@ -51,7 +51,7 @@ class ResponseBuilder:
                 addition: str = random.choice(self.__config.random_additions)
                 inputs.append(Input.from_string(addition, MessageRole.DEVELOPER))
 
-        inputs.append(
+        inputs.extend(
             Input.from_parsed_message(
                 messages[-1],
             )
