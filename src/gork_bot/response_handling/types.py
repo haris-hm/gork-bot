@@ -12,8 +12,8 @@ from discord import (
     TextChannel,
     User,
 )
-from typing import Self
 from enum import Enum
+from typing import Self
 
 from gork_bot.resource_management.config import BotConfig
 
