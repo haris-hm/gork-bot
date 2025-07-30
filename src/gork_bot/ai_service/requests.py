@@ -1,10 +1,16 @@
+import random
+
 from typing import Any
 
 from gork_bot import OAI_CLIENT
 
-from gork_bot.ai_service.types import Input, Metadata, Response
-from gork_bot.ai_service.enums import DiscordLocation
-from gork_bot.ai_service.enums import GPT_Model, MessageRole, RequestReason
+from gork_bot.ai_service.types import Input, Instructions, Metadata, Response
+from gork_bot.ai_service.enums import (
+    DiscordLocation,
+    GPT_Model,
+    MessageRole,
+    RequestReason,
+)
 
 from gork_bot.resource_management.config import AIConfig
 
@@ -12,27 +18,59 @@ from gork_bot.response_handling.types import ParsedMessage
 
 
 class ResponseBuilder:
-    def __init__(self, config: AIConfig, discord_messages: list[ParsedMessage]):
+    def __init__(self, config: AIConfig):
         self.__config: AIConfig = config
-        self.__inputs: list[ParsedMessage] = discord_messages
 
-    def build_inputs(self, model_instructions: str) -> list[dict[str, Any]]:
-        inputs: list[Input] = [
-            Input.from_string(content=model_instructions, role=MessageRole.DEVELOPER)
-        ]
+    def build_inputs(
+        self,
+        messages: list[ParsedMessage],
+        model_instructions: Instructions,
+        should_request_additions: bool = False,
+    ) -> list[dict[str, Any]]:
+        inputs: list[Input] = [Input.from_instructions(model_instructions)]
 
-        for input in self.__inputs:
+        # Exclude last message to add developer messages before it
+        for message in messages[:-1]:
             inputs.append(
                 Input.from_parsed_message(
-                    input,
+                    message,
                 )
             )
 
+        if should_request_additions:
+            if self.__config.post_media:
+                media_instructions: str = self.__config.media_store.get_instructions()
+                inputs.append(
+                    Input.from_string(media_instructions, MessageRole.DEVELOPER)
+                )
+
+            if (
+                self.__config.random_additions
+                and random.random() < self.__config.addition_chance
+            ):
+                addition: str = random.choice(self.__config.random_additions)
+                inputs.append(Input.from_string(addition, MessageRole.DEVELOPER))
+
+        inputs.append(
+            Input.from_parsed_message(
+                messages[-1],
+            )
+        )
+
         return [input.body for input in inputs]
 
-    def get_response(self, requestor: str, location: DiscordLocation) -> Response:
+    def get_chat_completion(
+        self,
+        requestor: str,
+        location: DiscordLocation,
+        discord_messages: list[ParsedMessage],
+    ) -> Response:
         model_name: str = self.__config.model
-        model_instructions: str = self.__config.get_instructions()
+        model_instructions: Instructions = Instructions(
+            self.__config.identity,
+            self.__config.instructions,
+        )
+
         metadata: Metadata = Metadata(
             reason=RequestReason.CHAT_COMPLETION,
             location=location,
@@ -45,22 +83,26 @@ class ResponseBuilder:
         return self.request_response(
             model=GPT_Model(model_name),
             instructions=model_instructions,
+            message_history=discord_messages,
             metadata=metadata,
             max_output_tokens=self.__config.max_tokens,
             temperature=self.__config.temperature,
+            request_additions=True,
         )
 
     def request_response(
         self,
         model: GPT_Model,
-        instructions: str,
+        instructions: Instructions,
+        message_history: list[ParsedMessage],
         metadata: Metadata,
         max_output_tokens: int,
         temperature: float,
+        request_additions: bool = False,
     ) -> Response:
         response = OAI_CLIENT.responses.create(
             model=model.value,
-            input=self.build_inputs(instructions),
+            input=self.build_inputs(message_history, instructions, request_additions),
             max_output_tokens=max_output_tokens,
             temperature=temperature,
             metadata=metadata.get_metadata(),

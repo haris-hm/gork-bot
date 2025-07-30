@@ -10,7 +10,7 @@ from discord import (
 from functools import wraps
 from typing import Any
 
-from gork_bot.ai_service.types import Metadata, Response
+from gork_bot.ai_service.types import Instructions, Metadata, Response
 from gork_bot.ai_service.enums import DiscordLocation, GPT_Model, RequestReason
 from gork_bot.ai_service.requests import ResponseBuilder
 
@@ -248,14 +248,12 @@ class ResponseHandler:
         :type should_reply: bool
         """
 
-        response_builder: ResponseBuilder = ResponseBuilder(
-            config=self._ai_config,
-            discord_messages=message_history,
-        )
+        response_builder: ResponseBuilder = ResponseBuilder(config=self._ai_config)
 
-        response: Response = response_builder.get_response(
+        response: Response = response_builder.get_chat_completion(
             requestor=self.message.author,
             location=DiscordLocation.from_channel(self.message.channel_type),
+            discord_messages=message_history,
         )
         embed: Embed | None = (
             Embed().set_image(url=response.gif) if response.gif else None
@@ -284,33 +282,33 @@ class ResponseHandler:
         if not referenced_message.from_this_bot:
             return None
 
-        response_builder: ResponseBuilder = ResponseBuilder(
-            config=self._ai_config,
-            discord_messages=message_history,
+        response_builder: ResponseBuilder = ResponseBuilder(config=self._ai_config)
+
+        instructions: Instructions = Instructions(
+            self._ai_config.thread_name_generation_identity,
+            self._ai_config.thread_name_generation_instructions,
         )
 
-        thread_name_instructions: str = f"# Identity\n\n {self._ai_config.thread_name_generation_identity}\n # Instructions\n\n {self._ai_config.thread_name_generation_instructions}"
-        thread_name = (
-            response_builder.request_response(
-                model=GPT_Model.GPT_4_1_MINI,
-                instructions=thread_name_instructions,
-                max_output_tokens=16,
-                temperature=0.25,
-                metadata=Metadata(
-                    reason=RequestReason.THREAD_NAME_GENERATION,
-                    location=DiscordLocation.THREAD,
-                    requestor="Gork Bot",
-                ),
-            )
-            .get_text()
-            .strip()
+        thread_name_response: Response = response_builder.request_response(
+            model=GPT_Model.GPT_4_1_MINI,
+            instructions=instructions,
+            message_history=message_history,
+            max_output_tokens=16,
+            temperature=0.25,
+            metadata=Metadata(
+                reason=RequestReason.THREAD_NAME_GENERATION,
+                location=DiscordLocation.THREAD,
+                requestor="Gork Bot",
+            ),
         )
+
+        thread_name: str = thread_name_response.get_text()
         thread_name = thread_name[:100]  # Limit thread name to 100 characters
 
         thread = await self.message.message_snowflake.create_thread(
             name=thread_name,
             auto_archive_duration=60,
-            reason="Creating a thread for follow-up discussion.",
+            reason=f"Gork Bot follow-up discussion with {message_history[-1].author}",
         )
         self.message.channel = thread
 

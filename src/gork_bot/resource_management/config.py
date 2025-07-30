@@ -1,4 +1,3 @@
-import random
 import os
 import yaml
 
@@ -90,12 +89,10 @@ class AIConfig(Config):
     def __init__(self, config_path: str):
         super().__init__(config_path)
 
-        self.__identity: str = self.get_config_value("identity")
-        self.__instructions: str = self.get_config_value("instructions")
-        self.__random_additions: list[str] = self.get_config_value(
-            "potential_additions"
-        )
-        self.__addition_chance: float = self.get_config_value("addition_chance")
+        self.identity: str = self.get_config_value("identity")
+        self.instructions: str = self.get_config_value("instructions")
+        self.random_additions: list[str] = self.get_config_value("potential_additions")
+        self.addition_chance: float = self.get_config_value("addition_chance")
 
         self.model: str = self.get_config_value("model")
         self.temperature: float = self.get_config_value("temperature")
@@ -125,7 +122,7 @@ class AIConfig(Config):
             internet_media=self.__internet_media,
         )
 
-        if not (0 <= self.__addition_chance <= 1):
+        if not (0 <= self.addition_chance <= 1):
             raise ValueError("Addition chance must be between 0 and 1.")
 
         if not (0 <= self.temperature <= 1):
@@ -151,24 +148,3 @@ class AIConfig(Config):
             "custom_media": {},
             "internet_media": {},
         }
-
-    def add_to_instructions(self, instructions: str, addition: str) -> None:
-        """Add a new instruction to the existing instructions."""
-        if addition and isinstance(addition, str):
-            return instructions + f" {addition.strip()}"
-        else:
-            return instructions
-
-    def get_instructions(self) -> str:
-        identity: str = self.__identity.strip()
-        instructions: str = self.__instructions.strip()
-
-        instructions = self.add_to_instructions(
-            instructions, self.media_store.get_instructions()
-        )
-
-        if self.__random_additions and random.random() < self.__addition_chance:
-            addition: str = random.choice(self.__random_additions)
-            instructions = self.add_to_instructions(instructions, addition)
-
-        return f"# Identity\n\n{identity}\n# Instructions\n\n{instructions}"

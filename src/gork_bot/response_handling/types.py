@@ -134,7 +134,7 @@ class ParsedMessage:
                 ParsedMessage(msg, self.bot_user)
                 async for msg in self.channel.history(limit=limit)
             ]
-            message_history = reversed(message_history)
+            message_history = list(reversed(message_history))
         elif (
             self.message_snowflake.reference
             and self.message_snowflake.reference.message_id

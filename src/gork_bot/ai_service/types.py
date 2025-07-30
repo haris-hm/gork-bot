@@ -33,6 +33,18 @@ class Metadata:
         }
 
 
+class Instructions:
+    def __init__(self, identity: str, instructions: str):
+        self.identity: str = identity.strip()
+        self.instructions: str = instructions.strip()
+
+    def get_instructions(self) -> str:
+        """
+        Returns the instructions as a formatted string.
+        """
+        return f"# Identity\n\n {self.identity}\n# Instructions\n\n{self.instructions}"
+
+
 class Response:
     def __init__(self, text: str, media_store: CustomMediaStore):
         self.__keyword_tag_pattern: re.Pattern = re.compile(r"%%([^%]+)%%")
@@ -43,7 +55,7 @@ class Response:
     def get_text(self) -> str:
         formatted_text: str = self.text.strip()
         formatted_text = re.sub(self.__keyword_tag_pattern, "", formatted_text)
-        return formatted_text
+        return formatted_text.strip()
 
     def set_gif(self, media_store: CustomMediaStore) -> str | None:
         if self.text:
@@ -103,10 +115,10 @@ class Input:
         input_image_url: str | None = discord_message.get_prompt_image_url()
 
         if input_text:
-            message.add_text_content(input_text)
+            message._add_text_content(input_text)
 
         if input_image_url:
-            message.add_image_content(input_image_url)
+            message._add_image_content(input_image_url)
 
         return message
 
@@ -116,10 +128,19 @@ class Input:
         Creates a Message instance from a string content.
         """
         message = cls(role=role)
-        message.add_text_content(content)
+        message._add_text_content(content)
         return message
 
-    def add_text_content(self, text: str):
+    @classmethod
+    def from_instructions(cls, instructions: Instructions) -> Self:
+        """
+        Creates a Message instance from Instructions.
+        """
+        message = cls(role=MessageRole.DEVELOPER)
+        message._add_text_content(instructions.get_instructions())
+        return message
+
+    def _add_text_content(self, text: str):
         """
         Adds text content to the message.
         """
@@ -130,7 +151,7 @@ class Input:
                 case MessageRole.ASSISTANT:
                     self.body["content"].append({"type": "output_text", "text": text})
 
-    def add_image_content(self, image_url: str):
+    def _add_image_content(self, image_url: str):
         """
         Adds image content to the message.
         """
