@@ -16,6 +16,11 @@ from gork_bot.ai_service.requests import ResponseBuilder
 
 from gork_bot.resource_management.config import BotConfig, AIConfig
 from gork_bot.response_handling.types import ParsedMessage, UserInfo
+from gork_bot.db_service.queries import (
+    get_user_by_id,
+    create_user,
+    update_user_messages,
+)
 
 
 class ResponseHandler:
@@ -123,6 +128,13 @@ class ResponseHandler:
 
         author: User = self.message.message_snowflake.author
         author_id: int = author.id
+
+        user_record: tuple[Any] = get_user_by_id(author_id)
+
+        if not user_record:
+            user_record = create_user(author_id, author.name)
+
+        print(user_record)
 
         if author.id not in self._user_info.keys():
             self._user_info[author_id] = UserInfo(user_id=author_id, name=author.name)

@@ -8,6 +8,7 @@ class GPT_Model(Enum):
     GPT_4_1_MINI = "gpt-4.1-mini"
     GPT_4_O_MINI = "gpt-4o-mini"
     GPT_4_1_NANO = "gpt-4.1-nano"
+    GPT_5_MINI = "gpt-5-mini"
 
 
 class MessageRole(Enum):

@@ -77,6 +77,10 @@ class ResponseBuilder:
             requestor=requestor,
         )
 
+        model_temperature: float = (
+            self.__config.temperature if "gpt-5" not in model_name else None
+        )
+
         if not model_name or not model_instructions:
             raise ValueError("Model and input must be set before getting a response.")
 
@@ -86,7 +90,7 @@ class ResponseBuilder:
             message_history=discord_messages,
             metadata=metadata,
             max_output_tokens=self.__config.max_tokens,
-            temperature=self.__config.temperature,
+            temperature=model_temperature,
             request_additions=True,
         )
 
@@ -100,11 +104,13 @@ class ResponseBuilder:
         temperature: float,
         request_additions: bool = False,
     ) -> Response:
+        model_temperature: float = temperature if "gpt-5" not in model.value else None
+
         response = OAI_CLIENT.responses.create(
             model=model.value,
             input=self.build_inputs(message_history, instructions, request_additions),
             max_output_tokens=max_output_tokens,
-            temperature=temperature,
+            temperature=model_temperature,
             metadata=metadata.get_metadata(),
             store=True,
         )
