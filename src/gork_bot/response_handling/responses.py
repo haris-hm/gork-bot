@@ -16,7 +16,7 @@ from gork_bot.ai_service.requests import ResponseBuilder
 
 from gork_bot.resource_management.config import BotConfig, AIConfig
 from gork_bot.response_handling.types import ParsedMessage, UserInfo
-from gork_bot.db_service.queries import (
+from gork_bot.db_service.models import (
     get_user_by_id,
     create_user,
     update_user_messages,
