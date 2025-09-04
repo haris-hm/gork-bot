@@ -1,12 +1,80 @@
 from datetime import datetime
-from typing import Self
+from typing import Self, Any
 
 from gork_bot.db_service.connection import run_query
 
 
 class GorkGuild:
-    def __init__(self, guild_id: int):
-        pass
+    def __init__(
+        self,
+        guild_id: int,
+        guild_name: str,
+        channel_allowlist_enabled: bool,
+        timeout_interval_mins: int,
+        allowed_messages_per_interval: int,
+    ):
+        self.guild_id: int = guild_id
+        self.guild_name: str = guild_name
+        self.channel_allowlist_enabled: bool = channel_allowlist_enabled
+        self.timeout_interval_mins: int = timeout_interval_mins
+        self.allowed_messages_per_interval: int = allowed_messages_per_interval
+
+    @classmethod
+    def get_by_id(cls, guild_id: int) -> Self | None:
+        query: str = "SELECT * FROM guilds WHERE guild_id = %s"
+        result: list[tuple[Any]] = run_query(query, (guild_id,))
+        if result:
+            guild_data: tuple[Any] = result[0]
+            return cls(
+                guild_id=guild_data[0],
+                guild_name=guild_data[1],
+                channel_allowlist_enabled=guild_data[2],
+                timeout_interval_mins=guild_data[3],
+                allowed_messages_per_interval=guild_data[4],
+            )
+
+        return None
+
+    @classmethod
+    def create(
+        cls,
+        guild_id: int,
+        guild_name: str,
+        channel_allowlist_enabled: bool = True,
+        timeout_interval_mins: int = 10,
+        allowed_messages_per_interval: int = 30,
+    ) -> Self:
+        query: str = """
+            INSERT INTO guilds (guild_id, guild_name, channel_allowlist_enabled, timeout_interval_mins, allowed_messages_per_interval) 
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        run_query(
+            query,
+            (
+                guild_id,
+                guild_name,
+                channel_allowlist_enabled,
+                timeout_interval_mins,
+                allowed_messages_per_interval,
+            ),
+        )
+        return cls(
+            guild_id=guild_id,
+            guild_name=guild_name,
+            channel_allowlist_enabled=channel_allowlist_enabled,
+            timeout_interval_mins=timeout_interval_mins,
+            allowed_messages_per_interval=allowed_messages_per_interval,
+        )
+
+    def channel_allowed(self, channel_id: int) -> bool:
+        if not self.channel_allowlist_enabled:
+            return True
+
+        query: str = (
+            "SELECT 1 FROM channel_allowlist WHERE guild_id = %s AND channel_id = %s"
+        )
+        result: list[tuple[Any]] = run_query(query, (self.guild_id, channel_id))
+        return bool(result)
 
 
 class GorkUser:
@@ -24,75 +92,48 @@ class GorkUser:
 
     @classmethod
     def get_by_id(cls, discord_id: int) -> Self | None:
-        query = "SELECT * FROM users WHERE discord_id = %s"
-        result = run_query(query, (discord_id,))
+        query: str = "SELECT * FROM users WHERE discord_id = %s"
+        result: list[tuple[Any]] = run_query(query, (discord_id,))
         if result:
-            user_data = result[0]
+            user_data: tuple[Any] = result[0]
             return cls(
-                discord_id=user_data["discord_id"],
-                username=user_data["name"],
-                messages_in_last_hour=user_data["messages_in_last_hour"],
-                last_message_time=user_data["last_message_time"],
+                discord_id=user_data[0],
+                username=user_data[1],
+                messages_in_last_hour=user_data[2],
+                last_message_time=user_data[3],
             )
         return None
 
+    @classmethod
+    def create(cls, discord_id: int, username: str) -> Self:
+        query: str = """
+            INSERT INTO users 
+            (discord_id, name, messages_in_last_hour, last_message_time) 
+            VALUES (%s, %s, %s, %s)
+        """
+        message_datestamp: datetime = datetime.now()
+        run_query(query, (discord_id, username, 1, message_datestamp))
+        return cls(
+            discord_id=discord_id,
+            username=username,
+            messages_in_last_hour=1,
+            last_message_time=message_datestamp,
+        )
 
-class GorkChannel:
-    def __init__(self):
-        pass
-
-
-# Guilds
-def get_guild_by_id(guild_id: int) -> dict | None:
-    query = "SELECT * FROM guilds WHERE guild_id = %s"
-    result = run_query(query, (guild_id,))
-    return result[0] if result else None
-
-
-def create_guild(
-    guild_id: int,
-    guild_name: str,
-    channel_allowlist_enabled: bool = True,
-    timeout_interval_mins: int = 10,
-) -> tuple[int, str, bool, int]:
-    query = """
-        INSERT INTO guilds (guild_id, guild_name, channel_allowlist_enabled, timeout_interval_mins) 
-        VALUES (%s, %s, %s, %s)
-    """
-    run_query(
-        query, (guild_id, guild_name, channel_allowlist_enabled, timeout_interval_mins)
-    )
-    return (guild_id, guild_name, channel_allowlist_enabled, timeout_interval_mins)
-
-
-# Users
-def get_user_by_id(
-    discord_id: int,
-) -> tuple[int, str, int | None, datetime | None] | None:
-    query = "SELECT * FROM users WHERE discord_id = %s"
-    result = run_query(query, (discord_id,))
-    return result[0] if result else None
-
-
-def create_user(discord_id: int, username: str) -> tuple[int, str, None, None]:
-    query = "INSERT INTO users (discord_id, name) VALUES (%s, %s)"
-    run_query(query, (discord_id, username))
-    return (discord_id, username, None, None)
-
-
-def update_user_messages(
-    discord_id: int, messages_in_last_hour: int, last_message_time: datetime
-) -> None:
-    query = """
-        UPDATE users 
-        SET messages_in_last_hour = %s, last_message_time = %s
-        WHERE discord_id = %s
-    """
-    run_query(
-        query,
-        (
-            messages_in_last_hour,
-            last_message_time,
-            discord_id,
-        ),
-    )
+    @classmethod
+    def update_messages(
+        cls, discord_id: int, messages_in_last_hour: int, last_message_time: datetime
+    ) -> None:
+        query: str = """
+            UPDATE users 
+            SET messages_in_last_hour = %s, last_message_time = %s
+            WHERE discord_id = %s
+        """
+        run_query(
+            query,
+            (
+                messages_in_last_hour,
+                last_message_time,
+                discord_id,
+            ),
+        )

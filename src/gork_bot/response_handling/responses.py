@@ -9,6 +9,7 @@ from discord import (
 )
 from functools import wraps
 from typing import Any
+from datetime import datetime, timedelta
 
 from gork_bot.ai_service.types import Instructions, Metadata, Response
 from gork_bot.ai_service.enums import DiscordLocation, GPT_Model, RequestReason
@@ -16,11 +17,7 @@ from gork_bot.ai_service.requests import ResponseBuilder
 
 from gork_bot.resource_management.config import BotConfig, AIConfig
 from gork_bot.response_handling.types import ParsedMessage, UserInfo
-from gork_bot.db_service.models import (
-    get_user_by_id,
-    create_user,
-    update_user_messages,
-)
+from gork_bot.db_service.models import GorkGuild, GorkUser
 
 
 class ResponseHandler:
@@ -32,6 +29,7 @@ class ResponseHandler:
         bot_config: BotConfig,
         ai_config: AIConfig,
         user_info: dict[int, UserInfo],
+        guild: GorkGuild | None = None,
         testing: bool = False,
     ):
         """Initializes the ResponseHandler with the necessary configurations and message.
@@ -50,6 +48,7 @@ class ResponseHandler:
         self._bot_config: BotConfig = bot_config
         self._ai_config: AIConfig = ai_config
         self._user_info: dict[int, UserInfo] = user_info if user_info else {}
+        self._guild: GorkGuild | None = guild
         self.__testing: bool = testing
 
         self.message: ParsedMessage = message
@@ -128,22 +127,35 @@ class ResponseHandler:
 
         author: User = self.message.message_snowflake.author
         author_id: int = author.id
+        author_name: str = author.name
 
-        user_record: tuple[Any] = get_user_by_id(author_id)
+        user: GorkUser | None = GorkUser.get_by_id(author_id)
 
-        if not user_record:
-            user_record = create_user(author_id, author.name)
+        if not user:
+            user = GorkUser.create(discord_id=author_id, username=author_name)
 
-        print(user_record)
-
-        if author.id not in self._user_info.keys():
-            self._user_info[author_id] = UserInfo(user_id=author_id, name=author.name)
-
-        user: UserInfo = self._user_info.get(author_id)
-
-        return user.update_message_stats(
-            self.message.message_snowflake, self._bot_config
+        user_within_limits: bool = (
+            user.messages_in_last_hour <= self._guild.allowed_messages_per_interval
         )
+
+        if user.last_message_time <= datetime.now() - timedelta(
+            minutes=self._guild.timeout_interval_mins
+        ):
+            # Reset the user after a timeout
+            GorkUser.update_messages(
+                discord_id=user.discord_id,
+                messages_in_last_hour=1,
+                last_message_time=datetime.now(),
+            )
+            user_within_limits = True
+        elif user_within_limits:
+            GorkUser.update_messages(
+                discord_id=user.discord_id,
+                messages_in_last_hour=user.messages_in_last_hour + 1,
+                last_message_time=datetime.now(),
+            )
+
+        return user_within_limits
 
     async def handle_response(self) -> None:
         """Handles the response based on the type of message received. It checks if the bot is
@@ -197,7 +209,6 @@ class ResponseHandler:
                     f"Unsupported ChannelType encountered: {self.message.channel_type}"
                 )
 
-    @with_typing
     async def __handle_reply_response(self) -> None:
         """Handles a response which sends a message referencing the original message as a reply.
 
@@ -224,7 +235,6 @@ class ResponseHandler:
 
         await self.__generate_response(message_history, should_reply=should_reply)
 
-    @with_typing
     async def __handle_direct_response(self) -> None:
         """Handles a response which sends a message without referencing the original message.
 
