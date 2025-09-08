@@ -2,6 +2,8 @@ from discord import (
     ChannelType,
     DMChannel,
     Embed,
+    Guild,
+    Member,
     Message,
     TextChannel,
     Thread,
@@ -10,14 +12,16 @@ from discord import (
 from functools import wraps
 from typing import Any
 from datetime import datetime, timedelta
+from pymysql.connections import Connection
 
 from gork_bot.ai_service.types import Instructions, Metadata, Response
 from gork_bot.ai_service.enums import DiscordLocation, GPT_Model, RequestReason
 from gork_bot.ai_service.requests import ResponseBuilder
 
+from gork_bot.db_service.connection import db_connect
 from gork_bot.resource_management.config import BotConfig, AIConfig
-from gork_bot.response_handling.types import ParsedMessage, UserInfo
-from gork_bot.db_service.models import GorkGuild, GorkUser
+from gork_bot.response_handling.types import ParsedMessage
+from gork_bot.db_service.models import GorkGuild, GorkMessageContext, GorkUser
 
 
 class ResponseHandler:
@@ -28,8 +32,6 @@ class ResponseHandler:
         message: ParsedMessage,
         bot_config: BotConfig,
         ai_config: AIConfig,
-        user_info: dict[int, UserInfo],
-        guild: GorkGuild | None = None,
         testing: bool = False,
     ):
         """Initializes the ResponseHandler with the necessary configurations and message.
@@ -47,8 +49,7 @@ class ResponseHandler:
         """
         self._bot_config: BotConfig = bot_config
         self._ai_config: AIConfig = ai_config
-        self._user_info: dict[int, UserInfo] = user_info if user_info else {}
-        self._guild: GorkGuild | None = guild
+        self._context: GorkMessageContext | None = None
         self.__testing: bool = testing
 
         self.message: ParsedMessage = message
@@ -124,33 +125,30 @@ class ResponseHandler:
         :return: True if the user is within the allowed limit, False otherwise.
         :rtype: bool
         """
-
-        author: User = self.message.message_snowflake.author
-        author_id: int = author.id
-        author_name: str = author.name
-
-        user: GorkUser | None = GorkUser.get_by_id(author_id)
-
-        if not user:
-            user = GorkUser.create(discord_id=author_id, username=author_name)
+        user: GorkUser = self._context.user
+        guild: GorkGuild = self._context.guild
 
         user_within_limits: bool = (
-            user.messages_in_last_hour <= self._guild.allowed_messages_per_interval
+            user.messages_in_last_hour <= guild.allowed_messages_per_interval
+        )
+
+        timeout_interval_mins: int = (
+            guild.timeout_interval_mins if guild.guild_id != -1 else 15
         )
 
         if user.last_message_time <= datetime.now() - timedelta(
-            minutes=self._guild.timeout_interval_mins
+            minutes=timeout_interval_mins
         ):
             # Reset the user after a timeout
-            GorkUser.update_messages(
-                discord_id=user.discord_id,
+            user.update_messages(
+                user_id=user.user_id,
                 messages_in_last_hour=1,
                 last_message_time=datetime.now(),
             )
             user_within_limits = True
         elif user_within_limits:
-            GorkUser.update_messages(
-                discord_id=user.discord_id,
+            user.update_messages(
+                user_id=user.user_id,
                 messages_in_last_hour=user.messages_in_last_hour + 1,
                 last_message_time=datetime.now(),
             )
@@ -170,45 +168,52 @@ class ResponseHandler:
             )
             return
 
-        if not self.__rate_limit_check():
-            await self.send_response(
-                content="You have exceeded the allowed number of messages. Please try again later.",
-                delete_after=60,
-                silent=True,
+        message_snowflake: Message = self.message.message_snowflake
+        channel: TextChannel | DMChannel | Thread | Any = self.message.channel
+        author: User | Member = message_snowflake.author
+        guild: Guild | None = (
+            message_snowflake.guild if message_snowflake.guild else None
+        )
+        connection: Connection = db_connect()
+
+        try:
+            self._context = GorkMessageContext(
+                user_id=author.id,
+                guild_id=guild.id if guild else -1,
+                connection=connection,
             )
 
-        channel: TextChannel | DMChannel | Thread | Any = self.message.channel
+            match self.message.channel_type:
+                case ChannelType.text:
+                    if not (
+                        self.message.bot_user in self.message.mentions
+                        and self._context.guild.channel_allowed(channel_id=channel.id)
+                    ):
+                        return
 
-        match self.message.channel_type:
-            case ChannelType.text:
-                if not (
-                    self.message.bot_user in self.message.mentions
-                    and self._bot_config.can_message_channel(
-                        channel=self.message.channel
+                    await self.__handle_reply_response()
+                case ChannelType.private:
+                    if not self._bot_config.can_respond_to_dm:
+                        await self.send_response(
+                            content="Direct messages are disabled for this bot.",
+                            delete_after=60,
+                            silent=True,
+                        )
+                        return
+
+                    await self.__handle_direct_response()
+                case ChannelType.public_thread | ChannelType.private_thread:
+                    if not channel.owner or channel.owner != self.message.bot_user:
+                        return
+                    await self.__handle_direct_response()
+                case _:
+                    raise ValueError(
+                        f"Unsupported ChannelType encountered: {self.message.channel_type}"
                     )
-                ):
-                    return
+        finally:
+            connection.close()
 
-                await self.__handle_reply_response()
-            case ChannelType.private:
-                if not self._bot_config.can_respond_to_dm:
-                    await self.send_response(
-                        content="Direct messages are disabled for this bot.",
-                        delete_after=60,
-                        silent=True,
-                    )
-                    return
-
-                await self.__handle_direct_response()
-            case ChannelType.public_thread | ChannelType.private_thread:
-                if not channel.owner or channel.owner != self.message.bot_user:
-                    return
-                await self.__handle_direct_response()
-            case _:
-                raise ValueError(
-                    f"Unsupported ChannelType encountered: {self.message.channel_type}"
-                )
-
+    @with_typing
     async def __handle_reply_response(self) -> None:
         """Handles a response which sends a message referencing the original message as a reply.
 
@@ -217,6 +222,14 @@ class ResponseHandler:
 
         :raises ValueError: If the channel type is not supported for reply responses.
         """
+        if not self.__rate_limit_check():
+            await self.send_response(
+                content="You have exceeded the allowed number of messages. Please try again later.",
+                delete_after=60,
+                silent=True,
+            )
+            return
+
         if self.message.channel_type != ChannelType.text:
             raise ValueError(
                 f"Unsupported ChannelType for reply response: {self.message.channel_type}"
@@ -235,6 +248,7 @@ class ResponseHandler:
 
         await self.__generate_response(message_history, should_reply=should_reply)
 
+    @with_typing
     async def __handle_direct_response(self) -> None:
         """Handles a response which sends a message without referencing the original message.
 

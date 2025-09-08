@@ -13,13 +13,16 @@ def db_connect() -> Connection:
     )
 
 
-def run_query(query: str, params: tuple = ()) -> list[tuple]:
-    connection = db_connect()
+def run_query(
+    query: str, params: tuple = (), connection: Connection | None = None
+) -> list[tuple]:
+    db_connection: Connection = connection if connection else db_connect()
     try:
-        with connection.cursor() as cursor:
+        with db_connection.cursor() as cursor:
             cursor.execute(query, params)
             result = cursor.fetchall()
-            connection.commit()
+            db_connection.commit()
             return result
     finally:
-        connection.close()
+        if connection is None:
+            db_connection.close()
