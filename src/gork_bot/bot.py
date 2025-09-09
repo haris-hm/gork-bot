@@ -71,10 +71,6 @@ class GorkBot(Client):
             print(
                 f"Error processing message from {message.author.name}: {traceback.format_exc()}"
             )
-        finally:
-            print(
-                f"Processed message from {message.author.name} in channel {message.channel.id}"
-            )
 
     async def _update_presence(self):
         await self.wait_until_ready()

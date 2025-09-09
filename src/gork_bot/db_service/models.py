@@ -91,7 +91,6 @@ class GorkGuild:
     def channel_allowed(self, channel_id: int) -> bool:
         if not self.channel_allowlist_enabled:
             return True
-        print(self.channel_allowlist)
         return channel_id in self.channel_allowlist
 
 
@@ -133,7 +132,6 @@ class GorkUser:
         """
 
         result: list[tuple[Any]] = run_query(query=query, params=(user_id, guild_id))
-        print(f"{result=}")
         if result:
             user_data: tuple[Any] = result[0]
             return cls(
