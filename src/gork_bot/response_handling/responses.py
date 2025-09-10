@@ -132,6 +132,8 @@ class ResponseHandler:
             user.messages_in_last_hour <= guild.allowed_messages_per_interval
         )
 
+        print(f"{user_within_limits=}")
+
         timeout_interval_mins: int = (
             guild.timeout_interval_mins if guild.guild_id != -1 else 15
         )
@@ -144,12 +146,13 @@ class ResponseHandler:
                 user_id=user.user_id,
                 messages_in_last_hour=1,
                 last_message_time=datetime.now(),
+                increment=False,
             )
             user_within_limits = True
         elif user_within_limits:
             user.update_messages(
                 user_id=user.user_id,
-                messages_in_last_hour=user.messages_in_last_hour + 1,
+                messages_in_last_hour=1,
                 last_message_time=datetime.now(),
             )
 
@@ -263,6 +266,14 @@ class ResponseHandler:
             raise ValueError(
                 f"Unsupported ChannelType for direct response: {self.message.channel_type}"
             )
+
+        if not self.__rate_limit_check():
+            await self.send_response(
+                content="You have exceeded the allowed number of messages. Please try again later.",
+                delete_after=60,
+                silent=True,
+            )
+            return
 
         message_history: list[ParsedMessage] = await self.message.get_history(
             limit=self._ai_config.thread_history_limit

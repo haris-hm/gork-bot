@@ -18,6 +18,8 @@ from gork_bot.resource_management.resource_stores import PresenceMessageStore
 from gork_bot.response_handling.types import ParsedMessage
 from gork_bot.response_handling.responses import ResponseHandler
 
+from gork_bot.db_service.models import GorkGuild
+
 
 class GorkBot(Client):
     def __init__(
@@ -58,19 +60,15 @@ class GorkBot(Client):
             await response_handler.handle_response()
 
         except Exception:
-            if isinstance(
-                message.channel, (DMChannel, Thread)
-            ) or self._bot_config.can_message_channel(message.channel):
-                await message.reply(
-                    content="An unexpected error occurred while processing your message. Please try again later.",
-                    mention_author=False,
-                    silent=True,
-                    delete_after=60,
-                )
+            if isinstance(message.channel, (DMChannel, Thread)):
+                await self._send_error_message(message)
+            elif message.guild is not None:
+                guild: GorkGuild = GorkGuild.get_by_id(guild_id=message.guild.id)
 
-            print(
-                f"Error processing message from {message.author.name}: {traceback.format_exc()}"
-            )
+                if not guild.channel_allowlist_enabled or guild.channel_allowed(
+                    channel_id=message.channel.id
+                ):
+                    await self._send_error_message(message)
 
     async def _update_presence(self):
         await self.wait_until_ready()
@@ -85,3 +83,15 @@ class GorkBot(Client):
             except Exception as e:
                 print(f"Error updating presence: {e}")
             await sleep(self._bot_config.presence_message_interval_mins * 60)
+
+    async def _send_error_message(self, message: Message):
+        await message.reply(
+            content="An unexpected error occurred while processing your message. Please try again later.",
+            mention_author=False,
+            silent=True,
+            delete_after=60,
+        )
+
+        print(
+            f"Error processing message from {message.author.name}: {traceback.format_exc()}"
+        )

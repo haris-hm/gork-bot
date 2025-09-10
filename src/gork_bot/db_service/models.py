@@ -180,15 +180,31 @@ class GorkUser:
         )
 
     def update_messages(
-        self, user_id: int, messages_in_last_hour: int, last_message_time: datetime
+        self,
+        user_id: int,
+        messages_in_last_hour: int,
+        last_message_time: datetime,
+        increment: bool = True,
     ) -> None:
-        query: str = """
-            UPDATE users 
-            SET messages_in_last_hour = %s, 
-                last_message_time = %s, 
-                lifetime_messages = lifetime_messages + 1
-            WHERE user_id = %s
-        """
+        query: str = ""
+
+        if increment:
+            query = """
+                UPDATE users
+                SET messages_in_last_hour = messages_in_last_hour + %s,
+                    last_message_time = %s,
+                    lifetime_messages = lifetime_messages + 1
+                WHERE user_id = %s
+                """
+        else:
+            query = """
+                UPDATE users 
+                SET messages_in_last_hour = %s, 
+                    last_message_time = %s, 
+                    lifetime_messages = lifetime_messages + 1
+                WHERE user_id = %s
+            """
+
         run_query(
             query=query,
             params=(
