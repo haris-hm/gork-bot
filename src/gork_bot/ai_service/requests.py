@@ -12,14 +12,14 @@ from gork_bot.ai_service.enums import (
     RequestReason,
 )
 
-from gork_bot.resource_management.config import BotConfigV2
+from gork_bot.resource_management.config import BotConfig
 from gork_bot.response_handling.types import ParsedMessage
-from gork_bot.db_service.models import GorkGuild, GorkMessageContext
+from gork_bot.db_service.models import GorkGuild, GorkMedia, GorkMessageContext
 
 
 class ResponseBuilder:
-    def __init__(self, bot_config: BotConfigV2, message_context: GorkMessageContext):
-        self._bot_config: BotConfigV2 = bot_config
+    def __init__(self, bot_config: BotConfig, message_context: GorkMessageContext):
+        self._bot_config: BotConfig = bot_config
         self._message_context: GorkMessageContext = message_context
 
     def build_inputs(
@@ -30,6 +30,7 @@ class ResponseBuilder:
     ) -> list[dict[str, Any]]:
         inputs: list[Input] = [Input.from_instructions(model_instructions)]
         guild_context: GorkGuild | None = self._message_context.guild
+        media_context: GorkMedia = self._message_context.media
 
         # Exclude last message to add developer messages before it
         for message in messages[:-1]:
@@ -40,7 +41,7 @@ class ResponseBuilder:
             )
 
         if guild_context.should_post_media:
-            custom_media_tags: set[str] = self._message_context.get_media_tags()
+            custom_media_tags: set[str] = media_context.get_media_tags()
             media_instructions: str = self._bot_config.get_instructions(
                 tags=custom_media_tags
             )
@@ -49,7 +50,8 @@ class ResponseBuilder:
         if guild_context.should_request_additions:
             if random.random() < guild_context.addition_chance:
                 addition: str = guild_context.get_prompt_addition()
-                inputs.append(Input.from_string(addition, MessageRole.DEVELOPER))
+                if addition:
+                    inputs.append(Input.from_string(addition, MessageRole.DEVELOPER))
 
         inputs.extend(
             Input.from_parsed_message(
@@ -65,10 +67,10 @@ class ResponseBuilder:
         location: DiscordLocation,
         discord_messages: list[ParsedMessage],
     ) -> Response:
-        model_name: str = self.__config.model
+        model_name: str = self._bot_config.model
         model_instructions: Instructions = Instructions(
-            identity=self.__config.identity,
-            instructions=self.__config.instructions,
+            identity=self._bot_config.identity,
+            instructions=self._bot_config.instructions,
         )
 
         metadata: Metadata = Metadata(
@@ -78,7 +80,7 @@ class ResponseBuilder:
         )
 
         model_temperature: float = (
-            self.__config.temperature if "gpt-5" not in model_name else None
+            self._bot_config.temperature if "gpt-5" not in model_name else None
         )
 
         if not model_name or not model_instructions:
@@ -89,7 +91,7 @@ class ResponseBuilder:
             instructions=model_instructions,
             message_history=discord_messages,
             metadata=metadata,
-            max_output_tokens=self.__config.max_tokens,
+            max_output_tokens=self._bot_config.max_tokens,
             temperature=model_temperature,
             request_additions=True,
         )

@@ -12,7 +12,7 @@ from discord import (
     User,
 )
 
-from gork_bot.resource_management.config import BotConfigV2
+from gork_bot.resource_management.config import BotConfig
 from gork_bot.resource_management.resource_stores import PresenceMessageStore
 
 from gork_bot.response_handling.types import ParsedMessage
@@ -31,7 +31,7 @@ class GorkBot(Client):
 
         self.__testing: bool = testing
 
-        self._bot_config = BotConfigV2(bot_config_path)
+        self._bot_config = BotConfig(bot_config_path)
 
         self._allowed_channels_cache: set[int] = set()
 

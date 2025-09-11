@@ -39,7 +39,7 @@ class Config(ABC):
         pass
 
 
-class BotConfigV2(Config):
+class BotConfig(Config):
     def __init__(self, config_path: str):
         super().__init__(config_path)
 
@@ -108,19 +108,29 @@ class BotConfigV2(Config):
 
         :return: A string containing the custom media instructions.
         """
-        default_weight = max(
-            0.0, 1.0 - (self.custom_media_weight + self.internet_media_weight)
-        )
+        default_media_instructions: str = self.__default_media.get(
+            "instructions", ""
+        ).strip()
+        custom_media_instructions: str = self.__custom_media.get(
+            "instructions", ""
+        ).strip()
+        internet_media_instructions: str = self.__internet_media.get(
+            "instructions", ""
+        ).strip()
+        custom_media_weight: float = float(self.__custom_media.get("weight", 0))
+        internet_media_weight: float = float(self.__internet_media.get("weight", 0))
+
+        default_weight = max(0.0, 1.0 - (custom_media_weight + internet_media_weight))
 
         options = [
-            self.default_media_instructions,
-            f"{self.custom_media_instructions}: {', '.join(sorted(tags))}",
-            self.internet_media_instructions,
+            default_media_instructions,
+            f"{custom_media_instructions}: {', '.join(sorted(tags))}",
+            internet_media_instructions,
         ]
         weights = [
             default_weight,
-            self.custom_media_weight,
-            self.internet_media_weight,
+            custom_media_weight,
+            internet_media_weight,
         ]
 
         return random.choices(options, weights=weights, k=1)[0].strip()
