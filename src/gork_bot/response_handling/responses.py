@@ -18,9 +18,10 @@ from gork_bot.ai_service.types import Instructions, Metadata, Response
 from gork_bot.ai_service.enums import DiscordLocation, GPT_Model, RequestReason
 from gork_bot.ai_service.requests import ResponseBuilder
 
-from gork_bot.db_service.connection import db_connect
 from gork_bot.resource_management.config import BotConfig, AIConfig
 from gork_bot.response_handling.types import ParsedMessage
+
+from gork_bot.db_service.connection import db_connect
 from gork_bot.db_service.models import GorkGuild, GorkMessageContext, GorkUser
 
 
@@ -131,8 +132,6 @@ class ResponseHandler:
         user_within_limits: bool = (
             user.messages_in_last_hour <= guild.allowed_messages_per_interval
         )
-
-        print(f"{user_within_limits=}")
 
         timeout_interval_mins: int = (
             guild.timeout_interval_mins if guild.guild_id != -1 else 15
@@ -296,7 +295,9 @@ class ResponseHandler:
         :type should_reply: bool
         """
 
-        response_builder: ResponseBuilder = ResponseBuilder(config=self._ai_config)
+        response_builder: ResponseBuilder = ResponseBuilder(
+            config=self._ai_config, message_context=self._context
+        )
 
         response: Response = response_builder.get_chat_completion(
             requestor=self.message.author,
@@ -330,7 +331,9 @@ class ResponseHandler:
         if not referenced_message.from_this_bot:
             return None
 
-        response_builder: ResponseBuilder = ResponseBuilder(config=self._ai_config)
+        response_builder: ResponseBuilder = ResponseBuilder(
+            config=self._ai_config, message_context=self._context
+        )
 
         instructions: Instructions = Instructions(
             self._ai_config.thread_name_generation_identity,

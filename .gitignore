@@ -18,3 +18,4 @@ prompts.yaml
 media_storage.json
 presence_message_storage.json
 temp.*
+.vscode

@@ -1,4 +1,5 @@
 import json
+import random
 
 from datetime import datetime
 from typing import Self, Any
@@ -15,14 +16,20 @@ class GorkGuild:
         timeout_interval_mins: int,
         allowed_messages_per_interval: int,
         channel_allowlist: list[int],
+        should_request_additions: bool,
+        addition_chance: float,
+        should_post_media: bool = True,
         connection: Connection | None = None,
     ):
-        self.connection: Connection | None = connection
+        self._connection: Connection | None = connection
         self.guild_id: int = guild_id
         self.channel_allowlist_enabled: bool = channel_allowlist_enabled
         self.timeout_interval_mins: int = timeout_interval_mins
         self.allowed_messages_per_interval: int = allowed_messages_per_interval
         self.channel_allowlist: set[int] = set(channel_allowlist)
+        self.should_request_additions: bool = should_request_additions
+        self.addition_chance: float = addition_chance
+        self.should_post_media: bool = should_post_media
 
     @classmethod
     def get_by_id(
@@ -31,7 +38,8 @@ class GorkGuild:
         query: str = """
             SELECT guild_id, channel_allowlist_enabled, 
                 timeout_interval_mins, allowed_messages_per_interval, 
-                channel_allowlist
+                channel_allowlist, should_request_additions, addition_chance,
+                should_post_media
             FROM guilds
             WHERE guild_id = %s
         """
@@ -47,6 +55,9 @@ class GorkGuild:
                 timeout_interval_mins=guild_data[2],
                 allowed_messages_per_interval=guild_data[3],
                 channel_allowlist=json.loads(guild_data[4]),
+                should_request_additions=guild_data[5],
+                addition_chance=guild_data[6],
+                should_post_media=guild_data[7],
                 connection=connection,
             )
 
@@ -59,14 +70,18 @@ class GorkGuild:
         channel_allowlist_enabled: bool = True,
         timeout_interval_mins: int = 10,
         allowed_messages_per_interval: int = 30,
+        should_request_additions: bool = True,
+        addition_chance: float = 0.2,
+        should_post_media: bool = True,
         connection: Connection | None = None,
     ) -> Self:
         query: str = """
             INSERT INTO guilds 
             (guild_id, channel_allowlist_enabled, 
                 timeout_interval_mins, allowed_messages_per_interval, 
-                channel_allowlist) 
-            VALUES (%s, %s, %s, %s, %s)
+                channel_allowlist, should_request_additions, addition_chance,
+                should_post_media) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         run_query(
             query=query,
@@ -75,6 +90,9 @@ class GorkGuild:
                 channel_allowlist_enabled,
                 timeout_interval_mins,
                 allowed_messages_per_interval,
+                should_request_additions,
+                addition_chance,
+                should_post_media,
                 json.dumps([]),
             ),
             connection=connection,
@@ -85,6 +103,9 @@ class GorkGuild:
             timeout_interval_mins=timeout_interval_mins,
             allowed_messages_per_interval=allowed_messages_per_interval,
             channel_allowlist=[],
+            should_request_additions=should_request_additions,
+            addition_chance=addition_chance,
+            should_post_media=should_post_media,
             connection=connection,
         )
 
@@ -92,6 +113,23 @@ class GorkGuild:
         if not self.channel_allowlist_enabled:
             return True
         return channel_id in self.channel_allowlist
+
+    def get_prompt_addition(self) -> str:
+        query: str = """
+            SELECT addition_text
+            FROM potential_additions
+            WHERE guild_id = %s
+        """
+
+        result: list[tuple[str]] = run_query(
+            query=query, params=(self.guild_id,), connection=self._connection
+        )
+
+        if result:
+            additions: list[str] = [row[0] for row in result]
+            return random.choice(additions)
+
+        return ""
 
 
 class GorkUser:
@@ -216,6 +254,43 @@ class GorkUser:
         )
 
 
+class GorkMedia:
+    def __init__(
+        self, media: dict[str, list[str]], connection: Connection | None = None
+    ):
+        self._connection: Connection | None = connection
+        self.media: dict[str, list[str]] = media
+
+    @classmethod
+    def get_from_guild_id(
+        cls, guild_id: int, connection: Connection | None = None
+    ) -> Self | None:
+        query: str = """
+            SELECT link, tag_name
+            FROM custom_media cm
+                JOIN media_tags mt
+                    ON cm.media_id = mt.media_id
+                    AND cm.guild_id = mt.guild_id
+                JOIN tags
+                    ON mt.tag_id = tags.tag_id
+            WHERE cm.guild_id = %s
+        """
+
+        result: list[tuple[Any]] = run_query(
+            query=query, params=(guild_id,), connection=connection
+        )
+
+        if result:
+            media: dict[str, list[str]] = {}
+            for media_link, tag_name in result:
+                if tag_name not in media:
+                    media[tag_name] = []
+                media[tag_name].append(media_link)
+            return cls(media=media)
+
+        return None
+
+
 class GorkMessageContext:
     def __init__(
         self, user_id: int, guild_id: int, connection: Connection | None = None
@@ -225,4 +300,7 @@ class GorkMessageContext:
         )
         self.user: GorkUser = GorkUser.get_by_id(
             user_id=user_id, guild_id=guild_id, connection=connection
+        )
+        self.media: GorkMedia = GorkMedia.get_from_guild_id(
+            guild_id=guild_id, connection=connection
         )
