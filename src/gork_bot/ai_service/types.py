@@ -11,10 +11,8 @@ from typing import Any, Self
 from gork_bot import CLIENT_KEY, GOOGLE_API_KEY
 
 from gork_bot.ai_service.enums import DiscordLocation, MessageRole, RequestReason
-
-from gork_bot.resource_management.resource_stores import CustomMediaStore
-
 from gork_bot.response_handling.types import ParsedMessage
+from gork_bot.db_service.models import GorkMedia, GorkMessageContext
 
 
 class Metadata:
@@ -46,23 +44,23 @@ class Instructions:
 
 
 class Response:
-    def __init__(self, text: str, media_store: CustomMediaStore):
+    def __init__(self, text: str, message_context: GorkMessageContext):
         self.__keyword_tag_pattern: re.Pattern = re.compile(r"%%([^%]+)%%")
 
         self.text: str = text
-        self.gif: str | None = self.set_gif(media_store)
+        self.gif: str | None = self.set_gif(message_context.media)
 
     def get_text(self) -> str:
         formatted_text: str = self.text.strip()
         formatted_text = re.sub(self.__keyword_tag_pattern, "", formatted_text)
         return formatted_text.strip()
 
-    def set_gif(self, media_store: CustomMediaStore) -> str | None:
+    def set_gif(self, media: GorkMedia) -> str | None:
         if self.text:
             matches: list[str] = self.__keyword_tag_pattern.findall(self.text)
             if matches:
                 for match in matches:
-                    gif_links: list[str] = media_store.get_gif(match)
+                    gif_links: list[str] = media.get_gif(match)
 
                     if gif_links:
                         return random.choice(gif_links)

@@ -12,7 +12,7 @@ from discord import (
     User,
 )
 
-from gork_bot.resource_management.config import AIConfig, BotConfig
+from gork_bot.resource_management.config import BotConfigV2
 from gork_bot.resource_management.resource_stores import PresenceMessageStore
 
 from gork_bot.response_handling.types import ParsedMessage
@@ -22,9 +22,7 @@ from gork_bot.db_service.models import GorkGuild
 
 
 class GorkBot(Client):
-    def __init__(
-        self, prompt_config_path: str, bot_config_path: str, testing: bool = False
-    ):
+    def __init__(self, bot_config_path: str, testing: bool = False):
         intents = Intents.default()
         intents.guild_messages = True
         intents.message_content = True
@@ -33,8 +31,7 @@ class GorkBot(Client):
 
         self.__testing: bool = testing
 
-        self._ai_config = AIConfig(prompt_config_path)
-        self._bot_config = BotConfig(bot_config_path)
+        self._bot_config = BotConfigV2(bot_config_path)
 
         self._allowed_channels_cache: set[int] = set()
 
@@ -52,7 +49,6 @@ class GorkBot(Client):
         try:
             response_handler: ResponseHandler = ResponseHandler(
                 message=ParsedMessage(message=message, bot_user=self.user),
-                ai_config=self._ai_config,
                 bot_config=self._bot_config,
                 testing=self.__testing,
             )

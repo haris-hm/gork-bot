@@ -290,6 +290,12 @@ class GorkMedia:
 
         return None
 
+    def get_media_tags(self) -> set[str]:
+        return set(self.media.keys())
+
+    def get_gif(self, tag: str) -> list[str]:
+        return self.media.get(tag, [])
+
 
 class GorkMessageContext:
     def __init__(

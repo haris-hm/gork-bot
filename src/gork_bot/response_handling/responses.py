@@ -18,7 +18,7 @@ from gork_bot.ai_service.types import Instructions, Metadata, Response
 from gork_bot.ai_service.enums import DiscordLocation, GPT_Model, RequestReason
 from gork_bot.ai_service.requests import ResponseBuilder
 
-from gork_bot.resource_management.config import BotConfig, AIConfig
+from gork_bot.resource_management.config import BotConfigV2
 from gork_bot.response_handling.types import ParsedMessage
 
 from gork_bot.db_service.connection import db_connect
@@ -31,8 +31,7 @@ class ResponseHandler:
     def __init__(
         self,
         message: ParsedMessage,
-        bot_config: BotConfig,
-        ai_config: AIConfig,
+        bot_config: BotConfigV2,
         testing: bool = False,
     ):
         """Initializes the ResponseHandler with the necessary configurations and message.
@@ -40,16 +39,13 @@ class ResponseHandler:
         :param message: The parsed message that the bot received.
         :type message: ParsedMessage
         :param bot_config: The configuration for the bot, including rate limits and other settings.
-        :type bot_config: BotConfig
-        :param ai_config: The configuration for the AI, including model settings and instructions.
-        :type ai_config: AIConfig
+        :type bot_config: BotConfigV2
         :param user_info: The user info dictionary, storing rate limit information
         :type user_info: dict[int, UserInfo]
         :param testing: If the bot is currently in testing mode, defaults to False
         :type testing: bool, optional
         """
-        self._bot_config: BotConfig = bot_config
-        self._ai_config: AIConfig = ai_config
+        self._bot_config: BotConfigV2 = bot_config
         self._context: GorkMessageContext | None = None
         self.__testing: bool = testing
 
@@ -296,7 +292,7 @@ class ResponseHandler:
         """
 
         response_builder: ResponseBuilder = ResponseBuilder(
-            config=self._ai_config, message_context=self._context
+            bot_config=self._ai_config, message_context=self._context
         )
 
         response: Response = response_builder.get_chat_completion(
@@ -332,7 +328,7 @@ class ResponseHandler:
             return None
 
         response_builder: ResponseBuilder = ResponseBuilder(
-            config=self._ai_config, message_context=self._context
+            bot_config=self._ai_config, message_context=self._context
         )
 
         instructions: Instructions = Instructions(

@@ -12,14 +12,14 @@ from gork_bot.ai_service.enums import (
     RequestReason,
 )
 
-from gork_bot.resource_management.config import AIConfig
+from gork_bot.resource_management.config import BotConfigV2
 from gork_bot.response_handling.types import ParsedMessage
 from gork_bot.db_service.models import GorkGuild, GorkMessageContext
 
 
 class ResponseBuilder:
-    def __init__(self, config: AIConfig, message_context: GorkMessageContext):
-        self.__config: AIConfig = config
+    def __init__(self, bot_config: BotConfigV2, message_context: GorkMessageContext):
+        self._bot_config: BotConfigV2 = bot_config
         self._message_context: GorkMessageContext = message_context
 
     def build_inputs(
@@ -35,12 +35,15 @@ class ResponseBuilder:
         for message in messages[:-1]:
             inputs.extend(
                 Input.from_parsed_message(
-                    message,
+                    discord_message=message,
                 )
             )
 
         if guild_context.should_post_media:
-            media_instructions: str = self.__config.media_store.get_instructions()
+            custom_media_tags: set[str] = self._message_context.get_media_tags()
+            media_instructions: str = self._bot_config.get_instructions(
+                tags=custom_media_tags
+            )
             inputs.append(Input.from_string(media_instructions, MessageRole.DEVELOPER))
 
         if guild_context.should_request_additions:
@@ -64,8 +67,8 @@ class ResponseBuilder:
     ) -> Response:
         model_name: str = self.__config.model
         model_instructions: Instructions = Instructions(
-            self.__config.identity,
-            self.__config.instructions,
+            identity=self.__config.identity,
+            instructions=self.__config.instructions,
         )
 
         metadata: Metadata = Metadata(
@@ -113,6 +116,6 @@ class ResponseBuilder:
         )
 
         return Response(
-            response.output_text,
-            self.__config.media_store,
+            text=response.output_text,
+            message_context=self._message_context,
         )
