@@ -1,9 +1,11 @@
 from gork_bot import DISCORD_TOKEN
-from gork_bot.bot import GorkBot
+from gork_bot.bot import GorkBot, setup_commands
 
 
 def main():
-    GorkBot(bot_config_path="config/bot.yaml").run(token=DISCORD_TOKEN)
+    gork_bot: GorkBot = GorkBot(bot_config_path="config/bot.yaml")
+    setup_commands(gork_bot)
+    gork_bot.run(token=DISCORD_TOKEN)
 
 
 def testing():

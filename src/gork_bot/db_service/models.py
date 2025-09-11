@@ -109,6 +109,15 @@ class GorkGuild:
             connection=connection,
         )
 
+    @classmethod
+    def get_all_guild_ids(cls, connection: Connection | None = None) -> list[int]:
+        query: str = """
+            SELECT guild_id
+            FROM guilds
+        """
+        result: list[tuple[Any]] = run_query(query=query, connection=connection)
+        return [str(row[0]) for row in result]
+
     def channel_allowed(self, channel_id: int) -> bool:
         if not self.channel_allowlist_enabled:
             return True
