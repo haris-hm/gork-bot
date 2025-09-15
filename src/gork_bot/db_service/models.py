@@ -140,6 +140,61 @@ class GorkGuild:
 
         return ""
 
+    def add_prompt_addition(self, addition_text: str) -> None:
+        query: str = """
+            INSERT INTO potential_additions
+            (guild_id, addition_text)
+            VALUES (%s, %s)
+        """
+
+        run_query(
+            query=query,
+            params=(self.guild_id, addition_text),
+            connection=self._connection,
+        )
+
+    def remove_prompt_addition(self, addition_text: str) -> bool:
+        check_query: str = """
+            SELECT 1
+            FROM potential_additions
+            WHERE guild_id = %s AND addition_text = %s
+        """
+
+        check_result: list[tuple[Any]] = run_query(
+            query=check_query,
+            params=(self.guild_id, addition_text),
+            connection=self._connection,
+        )
+
+        if not check_result:
+            return False
+
+        remove_query: str = """
+            DELETE FROM potential_additions
+            WHERE guild_id = %s AND addition_text = %s
+        """
+
+        run_query(
+            query=remove_query,
+            params=(self.guild_id, addition_text),
+            connection=self._connection,
+        )
+
+        return True
+
+    def get_all_prompt_additions(self) -> list[str]:
+        query: str = """
+            SELECT addition_text
+            FROM potential_additions
+            WHERE guild_id = %s
+        """
+
+        result: list[tuple[str]] = run_query(
+            query=query, params=(self.guild_id,), connection=self._connection
+        )
+
+        return [row[0] for row in result] if result else []
+
 
 class GorkUser:
     def __init__(

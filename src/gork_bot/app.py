@@ -1,5 +1,6 @@
 from gork_bot import DISCORD_TOKEN
-from gork_bot.bot import GorkBot, setup_commands
+from gork_bot.bot import GorkBot
+from gork_bot.slash_commands import setup_commands
 
 
 def main():
