@@ -1,0 +1,26 @@
+{
+  "name": "gork-bot",
+  "version": "2.0.0",
+  "description": "An AI powered Discord chatbot built for a private server",
+  "homepage": "https://github.com/haris-hm/gork-bot#readme",
+  "bugs": {
+    "url": "https://github.com/haris-hm/gork-bot/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haris-hm/gork-bot.git"
+  },
+  "license": "ISC",
+  "author": "Haris Mehuljic",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "node src/index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2",
+    "openai": "^6.49.0"
+  }
+}
